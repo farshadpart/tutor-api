@@ -1,4 +1,6 @@
 
+using Microsoft.EntityFrameworkCore;
+
 namespace TutorApi
 {
     public class Program
@@ -8,7 +10,11 @@ namespace TutorApi
             var builder = WebApplication.CreateBuilder(args);
 
             // Add services to the container.
-
+            builder.Services.AddDbContext<Data.TutorContext>(options =>
+                    options.UseNpgsql(builder.Configuration.GetConnectionString("TutorContext") 
+                        ?? throw new InvalidOperationException("Connection string 'TutorContext' not found.")
+                )
+            );
             builder.Services.AddControllers();
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
