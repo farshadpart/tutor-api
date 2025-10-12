@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace TutorApi.Data
+namespace Tutor.Api.Data
 {
     public class TutorContext : IdentityDbContext<IdentityUser>
     {

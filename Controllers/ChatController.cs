@@ -1,0 +1,56 @@
+using Microsoft.AspNetCore.Mvc;
+using OpenAI.Chat;
+using Tutor.Api.Models.Tutor.Api.Contracts;
+using Tutor.Api.Services;
+
+namespace Tutor.Api.Controllers
+{
+    [ApiController]
+    [Route("[controller]")]
+    public class ChatController : ControllerBase
+    {
+        private readonly ChatGptAudioService _chatGptAudioService;
+        private readonly ChatGptChatService _chatGptChatService;
+
+        public ChatController(ChatGptAudioService chatGptAudioService, ChatGptChatService chatGptChatService)
+        {
+            _chatGptAudioService = chatGptAudioService;
+            _chatGptChatService = chatGptChatService;
+        }
+
+        [HttpPost("speak")]
+        public IActionResult Speak([FromForm] IFormFile voice)
+        {
+            return Ok(_chatGptAudioService.Transcribe(voice));
+        }
+
+        [HttpPost("write")]
+        public async Task<IActionResult> Write([FromBody] Message[] tutorChat)
+        {
+            if (tutorChat == null || tutorChat.Length == 0)
+            {
+                return BadRequest("Chat messages cannot be null or empty.");
+            }
+
+            var chatGptChat = new List<ChatMessage>();
+            foreach (var message in tutorChat)
+            {
+                if (string.IsNullOrWhiteSpace(message.Content))
+                {
+                    return BadRequest("Message content cannot be empty.");
+                }
+
+                ChatMessage chatGptMessage = message.Role switch
+                {
+                    "user" => new UserChatMessage(message.Content),
+                    "assistant" => new AssistantChatMessage(message.Content),
+                    "system" => new SystemChatMessage(message.Content),
+                    _ => throw new Exception($"{message.Role} is not supported!")
+                };
+                chatGptChat.Add(chatGptMessage);
+            }
+
+            return Ok(await _chatGptChatService.ChatAsync([.. chatGptChat]));
+        }
+    }
+}
