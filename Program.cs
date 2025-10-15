@@ -1,4 +1,5 @@
 
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Tutor.Api.Data;
@@ -19,6 +20,11 @@ namespace Tutor.Api
                         ?? throw new InvalidOperationException("Connection string 'TutorContext' not found.")
                 )
             );
+
+            builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+                .AddEntityFrameworkStores<TutorContext>()
+                .AddDefaultTokenProviders();
+
             builder.Services.AddControllers();
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
@@ -26,6 +32,7 @@ namespace Tutor.Api
             builder.Services.AddSingleton<ChatGptChatService>();
             builder.Services.Configure<AppSettings>(builder.Configuration);
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<AppSettings>>().Value);
+            builder.Services.AddScoped<IEmailSender<IdentityUser>, EmailSender>();
 
             var app = builder.Build();
 

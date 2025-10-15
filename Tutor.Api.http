@@ -1,6 +1,13 @@
-@TutorApi_HostAddress = http://localhost:5252
+@TutorApi_HostAddress = http://192.168.2.103:5252
 
-GET {{TutorApi_HostAddress}}/weatherforecast/
+### Register a new user
+POST {{TutorApi_HostAddress}}/account/register
+Content-Type: application/json
 Accept: application/json
+
+{
+  "email": "user@example.com",
+  "password": "MyStrongP@ssword1"
+}
 
 ###

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using OpenAI.Chat;
-using Tutor.Api.Models.Tutor.Api.Contracts;
+using Tutor.Api.Models.Tutor.Api.Contracts.ChatServices;
 using Tutor.Api.Services;
 
 namespace Tutor.Api.Controllers
