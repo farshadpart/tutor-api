@@ -9,5 +9,15 @@ Accept: application/json
   "email": "user@example.com",
   "password": "MyStrongP@ssword1"
 }
+###
 
+### Login
+POST {{TutorApi_HostAddress}}/account/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "user@example.com",
+  "password": "MyStrongP@ssword1"
+}
 ###

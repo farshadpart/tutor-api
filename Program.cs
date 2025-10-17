@@ -1,7 +1,10 @@
 
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using Tutor.Api.Data;
 using Tutor.Api.Models;
 using Tutor.Api.Services;
@@ -20,6 +23,20 @@ namespace Tutor.Api
                         ?? throw new InvalidOperationException("Connection string 'TutorContext' not found.")
                 )
             );
+
+            builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters.ValidIssuer = builder.Configuration["Jwt:Issuer"];
+                options.TokenValidationParameters.ValidAudience = builder.Configuration["Jwt:Audience"];
+                options.TokenValidationParameters.IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SecretKey"]!));
+            });
+
+            builder.Services.AddAuthorization();
 
             builder.Services.AddIdentity<IdentityUser, IdentityRole>()
                 .AddEntityFrameworkStores<TutorContext>()
@@ -44,8 +61,8 @@ namespace Tutor.Api
 
             app.UseHttpsRedirection();
 
+            app.UseAuthentication();
             app.UseAuthorization();
-
 
             app.MapControllers();
 

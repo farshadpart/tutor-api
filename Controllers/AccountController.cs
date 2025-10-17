@@ -1,5 +1,10 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
+using System.Text;
+using Tutor.Api.Models;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
 
 namespace Tutor.Api.Controllers
@@ -11,12 +16,60 @@ namespace Tutor.Api.Controllers
         private readonly UserManager<IdentityUser> _userManager;
         private readonly IEmailSender<IdentityUser> _emailSender;
         private readonly ILogger<AccountController> _logger;
+        private readonly AppSettings _appSettings;
 
-        public AccountController(UserManager<IdentityUser> userManager, IEmailSender<IdentityUser> emailSender, ILogger<AccountController> logger)
+        public AccountController(UserManager<IdentityUser> userManager, IEmailSender<IdentityUser> emailSender, ILogger<AccountController> logger, AppSettings appSettings)
         {
             _userManager = userManager;
             _emailSender = emailSender;
             _logger = logger;
+            _appSettings = appSettings;
+        }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] RequestLogin requestLogin)
+        {
+            var identityUser = await _userManager.FindByEmailAsync(requestLogin.Email);
+            
+            if (identityUser is null)
+            {
+                return Unauthorized("Invalid email or password!");
+            }
+            var passwordValid = await _userManager.CheckPasswordAsync(identityUser, requestLogin.Password);
+            if (!passwordValid)
+            {
+                return Unauthorized("Invalid email or password!");
+            }
+            if (!await _userManager.IsEmailConfirmedAsync(identityUser))
+            {
+                return Unauthorized("Email not confirmed!");
+            }
+
+            var userRoles = await _userManager.GetRolesAsync(identityUser);
+            var userClaims = await _userManager.GetClaimsAsync(identityUser);
+
+            var singingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_appSettings.Jwt.SecretKey));
+            var credentials = new SigningCredentials(singingKey, SecurityAlgorithms.HmacSha256);
+            List<Claim> claims = [];
+
+            claims.Add(new Claim(ClaimTypes.Email, requestLogin.Email));
+            claims.AddRange(userClaims);
+            foreach (var role in userRoles) 
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.UtcNow.AddMinutes(_appSettings.Jwt.ExpirationMinutes),
+                SigningCredentials = credentials,
+                Issuer = _appSettings.Jwt.Issuer,
+                Audience = _appSettings.Jwt.Audience,
+                IssuedAt = DateTime.UtcNow
+            };
+            
+            return Ok(new { accessToken = new JsonWebTokenHandler().CreateToken(tokenDescriptor) });
         }
 
         [HttpPost("register")]
