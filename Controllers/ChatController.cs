@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenAI.Chat;
 using Tutor.Api.Models.Tutor.Api.Contracts.ChatServices;
@@ -5,6 +6,7 @@ using Tutor.Api.Services;
 
 namespace Tutor.Api.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("[controller]")]
     public class ChatController : ControllerBase

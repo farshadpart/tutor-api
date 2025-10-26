@@ -24,11 +24,7 @@ namespace Tutor.Api
                 )
             );
 
-            builder.Services.AddAuthentication(options =>
-            {
-                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-            })
+            builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
                 options.TokenValidationParameters.ValidIssuer = builder.Configuration["Jwt:Issuer"];
@@ -38,7 +34,8 @@ namespace Tutor.Api
 
             builder.Services.AddAuthorization();
 
-            builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+            builder.Services.AddIdentityCore<IdentityUser>()
+                .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<TutorContext>()
                 .AddDefaultTokenProviders();
 
