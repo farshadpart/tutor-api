@@ -114,14 +114,12 @@ namespace Tutor.Api.Services
                 activeCycle.Status = CycleStatus.Expired;
                 _logger.LogInformation("All possible requests in the cycle with id: {cycleId} have been used!", activeCycle.Id);
             }
-
-            if(activeCycle.StartedAt is null)
+            else if(activeCycle.StartedAt is null)
             {
                 _logger.LogError("An active cycle should have a not null 'StartAt' property!, Cycle: {@activeCycle}", activeCycle);
                 throw new Exception(Errors.SOMETHING_WENT_WRONG);
             }
-
-            if (activeCycle.StartedAt.Value.Add(activeSubscription.SubscriptionType.Duration) <= DateTime.UtcNow)
+            else if (activeCycle.StartedAt.Value.Add(activeSubscription.SubscriptionType.Duration) <= DateTime.UtcNow)
             {
                 activeCycle.ExpiredAt = DateTime.UtcNow;
                 activeCycle.Status = CycleStatus.Expired;
@@ -133,7 +131,7 @@ namespace Tutor.Api.Services
             {
                 user.ActiveSubscriptionId = null;
                 await _tutorContext.SaveChangesAsync();
-                throw new TutorException(Errors.USER_NOT_HAVE_SUBSCRIPTION);
+                throw new TutorException(Errors.NO_ACTIVE_CYCLE);
             }
 
             queuedCycle.StartedAt = DateTime.UtcNow;
