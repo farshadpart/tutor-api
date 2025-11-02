@@ -43,8 +43,9 @@ namespace Tutor.Api
             builder.Services.AddControllers();
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
-            builder.Services.AddSingleton<ChatGptAudioService>();
-            builder.Services.AddSingleton<ChatGptChatService>();
+            builder.Services.AddScoped<ChatGptAudioService>();
+            builder.Services.AddScoped<ChatGptChatService>();
+            builder.Services.AddScoped<SubscriptionService>();
             builder.Services.Configure<AppSettings>(builder.Configuration);
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<AppSettings>>().Value);
             builder.Services.AddScoped<IEmailSender<User>, EmailSender>();
