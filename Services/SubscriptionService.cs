@@ -57,7 +57,6 @@ namespace Tutor.Api.Services
             {
                 Id = Guid.CreateVersion7(),
                 CreatedAt = DateTime.UtcNow,
-                MaxValidUntil = DateTime.UtcNow.Add(subscriptionType.Duration),
                 Status = CycleStatus.Active
             });
 
@@ -111,12 +110,22 @@ namespace Tutor.Api.Services
 
             if(activeCycle.CurrentRequestConut >= activeSubscription.SubscriptionType.MaxRequestCount)
             {
-                user.ActiveSubscriptionId = null;
                 activeCycle.ExpiredAt = DateTime.UtcNow;
+                activeCycle.Status = CycleStatus.Expired;
+                _logger.LogInformation("All possible requests in the cycle with id: {cycleId} have been used!", activeCycle.Id);
+            }
+
+            var queuedCycle = activeSubscription.Cycles.FirstOrDefault(x => x.Status.Equals(CycleStatus.Queued));
+            if (queuedCycle is null)
+            {
+                user.ActiveSubscriptionId = null;
                 await _tutorContext.SaveChangesAsync();
-                _logger.LogError("All possible requests in the cycle with id: {cycleId} have been used!", activeCycle.Id);
                 throw new TutorException(Errors.USER_NOT_HAVE_SUBSCRIPTION);
             }
+
+            queuedCycle.StartedAt = DateTime.UtcNow;
+            queuedCycle.Status = CycleStatus.Active;
+            await _tutorContext.SaveChangesAsync();
         }
 
         public async Task RegisterRequest(string userId)
