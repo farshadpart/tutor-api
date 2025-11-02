@@ -2,6 +2,7 @@
 {
     public static class Errors
     {
+        public const string SOMETHING_WENT_WRONG = "Something went wrong!";
         public const string USER_ALREADY_HAS_SUBSCRIPTION = "The user already has a subscription with this type!";
         public const string SUBSCRIPTION_START_DATE_INVALID = "The subscription start date is not valid!";
         public const string USER_NOT_EXIST = "The user does not exist!";

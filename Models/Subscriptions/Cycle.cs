@@ -14,7 +14,6 @@
     {
         Active,
         Queued,
-        Completed,
         Expired
     }
 }

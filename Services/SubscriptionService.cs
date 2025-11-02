@@ -115,6 +115,19 @@ namespace Tutor.Api.Services
                 _logger.LogInformation("All possible requests in the cycle with id: {cycleId} have been used!", activeCycle.Id);
             }
 
+            if(activeCycle.StartedAt is null)
+            {
+                _logger.LogError("An active cycle should have a not null 'StartAt' property!, Cycle: {@activeCycle}", activeCycle);
+                throw new Exception(Errors.SOMETHING_WENT_WRONG);
+            }
+
+            if (activeCycle.StartedAt.Value.Add(activeSubscription.SubscriptionType.Duration) <= DateTime.UtcNow)
+            {
+                activeCycle.ExpiredAt = DateTime.UtcNow;
+                activeCycle.Status = CycleStatus.Expired;
+                _logger.LogInformation("The time window of the cycle with id: {cycleId} has finished!", activeCycle.Id);
+            }
+
             var queuedCycle = activeSubscription.Cycles.FirstOrDefault(x => x.Status.Equals(CycleStatus.Queued));
             if (queuedCycle is null)
             {
