@@ -85,16 +85,16 @@ namespace Tutor.Api.Services
             await _tutorContext.SaveChangesAsync();
         }
 
-        public async Task Assert(string userEmail)
+        public async Task Assert(string userId)
         {
-            var user = _tutorContext.Users.FirstOrDefault(x => x.Id.Equals(userEmail));
+            var user = _tutorContext.Users.FirstOrDefault(x => x.Id.Equals(userId));
             if (user is null)
             {
-                _logger.LogError("No users exist with email: {email}", userEmail);
+                _logger.LogError("No users exist with email: {email}", userId);
                 throw new TutorException(Errors.USER_NOT_EXIST);
             }
 
-            var activeSubscription = user.Subscriptions.FirstOrDefault(x =>x.Id.Equals(userEmail));
+            var activeSubscription = user.Subscriptions.FirstOrDefault(x =>x.Id.Equals(userId));
             if (activeSubscription is null)
             {
                 _logger.LogError("The user does not have any active subscription");
