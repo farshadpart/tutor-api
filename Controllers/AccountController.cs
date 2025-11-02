@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
 using Tutor.Api.Models;
+using Tutor.Api.Models.Constants;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
 
 namespace Tutor.Api.Controllers
@@ -53,6 +54,7 @@ namespace Tutor.Api.Controllers
             List<Claim> claims = [];
 
             claims.Add(new Claim(ClaimTypes.Email, requestLogin.Email));
+            claims.Add(new Claim(TutorClaimTypes.Id, identityUser.Id));
             claims.AddRange(userClaims);
             foreach (var role in userRoles) 
             {

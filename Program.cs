@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Tutor.Api.Data;
 using Tutor.Api.Models;
+using Tutor.Api.Models.Account;
 using Tutor.Api.Services;
 
 namespace Tutor.Api
@@ -34,7 +35,7 @@ namespace Tutor.Api
 
             builder.Services.AddAuthorization();
 
-            builder.Services.AddIdentityCore<IdentityUser>()
+            builder.Services.AddIdentityCore<User>()
                 .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<TutorContext>()
                 .AddDefaultTokenProviders();
@@ -46,7 +47,7 @@ namespace Tutor.Api
             builder.Services.AddSingleton<ChatGptChatService>();
             builder.Services.Configure<AppSettings>(builder.Configuration);
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<AppSettings>>().Value);
-            builder.Services.AddScoped<IEmailSender<IdentityUser>, EmailSender>();
+            builder.Services.AddScoped<IEmailSender<User>, EmailSender>();
 
             var app = builder.Build();
 
