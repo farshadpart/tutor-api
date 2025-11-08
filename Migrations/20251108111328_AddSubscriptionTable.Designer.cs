@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Tutor.Api.Data;
@@ -11,9 +12,11 @@ using Tutor.Api.Data;
 namespace TutorApi.Migrations
 {
     [DbContext(typeof(TutorContext))]
-    partial class TutorContextModelSnapshot : ModelSnapshot
+    [Migration("20251108111328_AddSubscriptionTable")]
+    partial class AddSubscriptionTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
