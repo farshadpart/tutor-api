@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenAI.Chat;
+using Tutor.Api.Models.Constants;
 using Tutor.Api.Models.Tutor.Api.Contracts.ChatServices;
 using Tutor.Api.Services;
 
@@ -13,22 +14,39 @@ namespace Tutor.Api.Controllers
     {
         private readonly ChatGptAudioService _chatGptAudioService;
         private readonly ChatGptChatService _chatGptChatService;
+        private readonly ILogger<ChatController> _logger;
 
-        public ChatController(ChatGptAudioService chatGptAudioService, ChatGptChatService chatGptChatService)
+        public ChatController(ChatGptAudioService chatGptAudioService, ChatGptChatService chatGptChatService, ILogger<ChatController> logger)
         {
             _chatGptAudioService = chatGptAudioService;
             _chatGptChatService = chatGptChatService;
+            _logger = logger;
         }
 
         [HttpPost("speak")]
-        public IActionResult Speak([FromForm] IFormFile voice)
+        public async Task<IActionResult> Speak([FromForm] IFormFile voice)
         {
-            return Ok(_chatGptAudioService.Transcribe(voice));
+            string? userId = User.GetClaimValue(TutorClaimTypes.Id);
+            if (userId is null)
+            {
+                _logger.LogError("The logged in user is not valid! User: {@user}", User);
+                return BadRequest("The user is not valid!");
+            }
+
+            return Ok(_chatGptAudioService.Transcribe(voice, userId));
         }
 
         [HttpPost("write")]
         public async Task<IActionResult> Write([FromBody] Message[] tutorChat)
         {
+            string? userId = User.GetClaimValue(TutorClaimTypes.Id);
+            if( userId is null)
+            {
+                _logger.LogError("The logged in user is not valid! User: {@user}", User);
+                return BadRequest("The user is not valid!");
+            }
+
+
             if (tutorChat == null || tutorChat.Length == 0)
             {
                 return BadRequest("Chat messages cannot be null or empty.");
@@ -51,8 +69,8 @@ namespace Tutor.Api.Controllers
                 };
                 chatGptChat.Add(chatGptMessage);
             }
-
-            return Ok(await _chatGptChatService.ChatAsync([.. chatGptChat]));
+            
+            return Ok(await _chatGptChatService.ChatAsync([.. chatGptChat], userId));
         }
     }
 }

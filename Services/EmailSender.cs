@@ -1,10 +1,11 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using System.Net.Mail;
 using Tutor.Api.Models;
+using Tutor.Api.Models.Account;
 
 namespace Tutor.Api.Services
 {
-    public class EmailSender : IEmailSender<IdentityUser>
+    public class EmailSender : IEmailSender<User>
     {
         private readonly SmtpClient _smtpClient;
         private readonly Smtp _smtp;
@@ -15,7 +16,7 @@ namespace Tutor.Api.Services
             _smtpClient = new SmtpClient(_smtp.Host, _smtp.Port);
         }
 
-        public async Task SendConfirmationLinkAsync(IdentityUser user, string email, string confirmationLink)
+        public async Task SendConfirmationLinkAsync(User user, string email, string confirmationLink)
         {
 
             var mailMessage = new MailMessage
@@ -31,7 +32,7 @@ namespace Tutor.Api.Services
             await _smtpClient.SendMailAsync(mailMessage);
         }
 
-        public async Task SendPasswordResetCodeAsync(IdentityUser user, string email, string resetCode)
+        public async Task SendPasswordResetCodeAsync(User user, string email, string resetCode)
         {
             var mailMessage = new MailMessage
             {
@@ -46,7 +47,7 @@ namespace Tutor.Api.Services
             await _smtpClient.SendMailAsync(mailMessage);
         }
 
-        public async Task SendPasswordResetLinkAsync(IdentityUser user, string email, string resetLink)
+        public async Task SendPasswordResetLinkAsync(User user, string email, string resetLink)
         {
             var mailMessage = new MailMessage
             {

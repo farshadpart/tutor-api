@@ -5,6 +5,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
 using Tutor.Api.Models;
+using Tutor.Api.Models.Account;
+using Tutor.Api.Models.Constants;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
 
 namespace Tutor.Api.Controllers
@@ -13,12 +15,12 @@ namespace Tutor.Api.Controllers
     [Route("[controller]")]
     public class AccountController : ControllerBase
     {
-        private readonly UserManager<IdentityUser> _userManager;
-        private readonly IEmailSender<IdentityUser> _emailSender;
+        private readonly UserManager<User> _userManager;
+        private readonly IEmailSender<User> _emailSender;
         private readonly ILogger<AccountController> _logger;
         private readonly AppSettings _appSettings;
 
-        public AccountController(UserManager<IdentityUser> userManager, IEmailSender<IdentityUser> emailSender, ILogger<AccountController> logger, AppSettings appSettings)
+        public AccountController(UserManager<User> userManager, IEmailSender<User> emailSender, ILogger<AccountController> logger, AppSettings appSettings)
         {
             _userManager = userManager;
             _emailSender = emailSender;
@@ -53,6 +55,7 @@ namespace Tutor.Api.Controllers
             List<Claim> claims = [];
 
             claims.Add(new Claim(ClaimTypes.Email, requestLogin.Email));
+            claims.Add(new Claim(TutorClaimTypes.Id, identityUser.Id));
             claims.AddRange(userClaims);
             foreach (var role in userRoles) 
             {
@@ -75,7 +78,7 @@ namespace Tutor.Api.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RequestCreateUser requestCreateUser)
         {
-            var identityUser = new IdentityUser
+            var identityUser = new User
             {
                 UserName = requestCreateUser.Email,
                 NormalizedUserName = requestCreateUser.Email.ToUpper(),
