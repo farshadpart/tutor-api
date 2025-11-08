@@ -24,17 +24,10 @@ namespace Tutor.Api.Controllers
             return Ok();
         }
 
-        [HttpPost("active")]
-        public async Task<IActionResult> Active([FromBody] ActiveSubscriptionRequest activeSubscriptionRequest)
+        [HttpGet("getSubscriptionGroups")]
+        public IActionResult GetSubscriptionGroups()
         {
-            await _subscriptionService.Active(activeSubscriptionRequest);
-            return Ok();
-        }
-
-        [HttpGet("getSubscriptionTypes")]
-        public async Task<IActionResult> GetSubscriptionTypes()
-        {
-            return Ok(await _subscriptionService.GetSubscriptionTypes());
+            return Ok(_subscriptionService.GetSubscriptionGroups());
         }
     }
 }

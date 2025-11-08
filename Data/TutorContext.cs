@@ -10,7 +10,6 @@ namespace Tutor.Api.Data
         public TutorContext(DbContextOptions<TutorContext> options) : base(options) { }
 
         public DbSet<Subscription> Subscriptions { get; set; }
-        public DbSet<SubscriptionType> SubscriptionsTypes { get; set; }
         public DbSet<Cycle> Cycles { get; set; }
     }
 }

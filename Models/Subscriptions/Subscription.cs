@@ -1,14 +1,15 @@
-﻿using Tutor.Api.Models.Account;
-
-namespace Tutor.Api.Models.Subscriptions
+﻿namespace Tutor.Api.Models.Subscriptions
 {
     public class Subscription
     {
         public Guid Id { get; set; }
-        public User User { get; set; } = new();
         public DateTimeOffset CreatedAt { get; set; }
-        public Guid SubscriptionTypeId { get; set; }
-        public SubscriptionType SubscriptionType { get; set; } = new();
+        public SubscriptionGroup Group { get; set; } = SubscriptionGroup.Basic;
         public List<Cycle> Cycles { get; set; } = [];
+    }
+
+    public enum SubscriptionGroup
+    {
+        Basic
     }
 }
