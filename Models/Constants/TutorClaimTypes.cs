@@ -3,5 +3,6 @@
     public class TutorClaimTypes
     {
         public const string Id = "http://schemas.xmlsoap.org/ws/2009/09/identity/claims/id";
+        public const string SubscriptionGroup = "http://schemas.xmlsoap.org/ws/2009/09/identity/claims/subscriptionGroup";
     }
 }

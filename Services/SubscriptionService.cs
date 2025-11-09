@@ -144,5 +144,16 @@ namespace Tutor.Api.Services
         {
             return [.. Enum.GetValues<SubscriptionGroup>().Select(e => e.ToString())];
         }
+
+        public SubscriptionGroup? GetUserUseableSubscriptionGroup(string userId)
+        {
+            var useableSubscription = _tutorContext.Users
+                .Include(x => x.Subscriptions)
+                .ThenInclude(x => x.Cycles)
+                .FirstOrDefault(x => x.Id.Equals(userId))?.Subscriptions
+                .FirstOrDefault(x => x.Cycles.OrderBy(x => x.CreatedAt).Any(c => c.Status.Equals(CycleStatus.Active) || c.Status.Equals(CycleStatus.Queued)));
+
+            return useableSubscription?.Group;
+        }
     }
 }
