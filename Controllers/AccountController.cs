@@ -8,6 +8,7 @@ using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Constants;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
+using Tutor.Api.Services;
 
 namespace Tutor.Api.Controllers
 {
@@ -19,13 +20,15 @@ namespace Tutor.Api.Controllers
         private readonly IEmailSender<User> _emailSender;
         private readonly ILogger<AccountController> _logger;
         private readonly AppSettings _appSettings;
+        private readonly SubscriptionService _subscriptionService;
 
-        public AccountController(UserManager<User> userManager, IEmailSender<User> emailSender, ILogger<AccountController> logger, AppSettings appSettings)
+        public AccountController(UserManager<User> userManager, IEmailSender<User> emailSender, ILogger<AccountController> logger, AppSettings appSettings, SubscriptionService subscriptionService)
         {
             _userManager = userManager;
             _emailSender = emailSender;
             _logger = logger;
             _appSettings = appSettings;
+            _subscriptionService = subscriptionService;
         }
 
         [HttpPost("login")]
@@ -56,6 +59,11 @@ namespace Tutor.Api.Controllers
 
             claims.Add(new Claim(ClaimTypes.Email, requestLogin.Email));
             claims.Add(new Claim(TutorClaimTypes.Id, identityUser.Id));
+            var userSubscriptionGroup = _subscriptionService.GetUserUseableSubscriptionGroup(identityUser.Id)?.ToString();
+            if(userSubscriptionGroup is not null)
+            {
+                claims.Add(new Claim(TutorClaimTypes.SubscriptionGroup, userSubscriptionGroup));
+            }
             claims.AddRange(userClaims);
             foreach (var role in userRoles) 
             {
