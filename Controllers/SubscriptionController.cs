@@ -24,6 +24,7 @@ namespace Tutor.Api.Controllers
             return Ok();
         }
 
+        [AllowAnonymous]
         [HttpGet("getSubscriptionGroups")]
         public IActionResult GetSubscriptionGroups()
         {
