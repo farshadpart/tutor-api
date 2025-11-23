@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
 using System.Text;
 using Tutor.Api.Data;
+using Tutor.Api.Middlewares;
 using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Services;
@@ -18,9 +20,12 @@ namespace Tutor.Api
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Add services to the container.
+            Log.Logger = new LoggerConfiguration()
+                .ReadFrom.Configuration(builder.Configuration)
+                .CreateLogger();
+
             builder.Services.AddDbContext<TutorContext>(options =>
-                    options.UseNpgsql(builder.Configuration.GetConnectionString("TutorContext") 
+                    options.UseNpgsql(builder.Configuration.GetConnectionString("TutorContext")
                         ?? throw new InvalidOperationException("Connection string 'TutorContext' not found.")
                 )
             );
@@ -49,9 +54,11 @@ namespace Tutor.Api
             builder.Services.Configure<AppSettings>(builder.Configuration);
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<AppSettings>>().Value);
             builder.Services.AddScoped<IEmailSender<User>, EmailSender>();
+            builder.Services.AddSerilog();
 
             var app = builder.Build();
 
+            app.UseExceptionHandlingMiddleware();
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
@@ -65,6 +72,7 @@ namespace Tutor.Api
 
             app.MapControllers();
 
+            Log.Logger.Information("Starting Tutor.Api!");
             app.Run();
         }
     }
