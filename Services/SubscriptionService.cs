@@ -63,7 +63,7 @@ namespace Tutor.Api.Services
                 .OrderBy(x => x.CreatedAt)
                 .Where(x => x.Status.Equals(CycleStatus.Active) || x.Status.Equals(CycleStatus.Queued));
 
-            if (useableCycles is null || useableCycles.Count().Equals(0))
+            if (useableCycles is null || !useableCycles.Any())
             {
                 _logger.LogError("The user with id: {userId} does not have any active or queued cycle!", userId);
                 throw new TutorException(Errors.NO_ACTIVE_CYCLE);
