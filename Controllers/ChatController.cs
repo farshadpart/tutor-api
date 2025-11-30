@@ -33,7 +33,7 @@ namespace Tutor.Api.Controllers
                 return BadRequest("The user is not valid!");
             }
 
-            return Ok(_chatGptAudioService.Transcribe(voice, userId));
+            return Ok(await _chatGptAudioService.Transcribe(voice, userId));
         }
 
         [HttpPost("write")]
