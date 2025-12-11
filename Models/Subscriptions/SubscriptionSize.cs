@@ -7,6 +7,7 @@
             return size switch
             {
                 CycleSize.Standard => TimeSpan.FromDays(30),
+                CycleSize.PlayTest => TimeSpan.FromDays(30 * 365),
                 _ => throw new ArgumentOutOfRangeException(nameof(size), size, null)
             };
         }
@@ -16,6 +17,7 @@
             return size switch
             {
                 CycleSize.Standard => 5000,
+                CycleSize.PlayTest => 5000,
                 _ => throw new ArgumentOutOfRangeException(nameof(size), size, null)
             };
         }
@@ -23,6 +25,7 @@
 
     public enum CycleSize
     {
-        Standard
+        Standard,
+        PlayTest
     }
 }
