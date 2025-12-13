@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using System.Net.Mail;
 using System.Security.Claims;
 using System.Text;
 using Tutor.Api.Models;
@@ -86,6 +87,11 @@ namespace Tutor.Api.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RequestCreateUser requestCreateUser)
         {
+            if(!MailAddress.TryCreate(requestCreateUser.Email, out _))
+            {
+                return BadRequest("The entered email address is not valid!");
+            }
+
             var identityUser = new User
             {
                 UserName = requestCreateUser.Email,
