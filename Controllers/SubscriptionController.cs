@@ -21,7 +21,7 @@ namespace Tutor.Api.Controllers
         public async Task<IActionResult> Create([FromBody] CreateSubscriptionRequest createRequest)
         {
             await _subscriptionService.Create(createRequest);
-            return Ok();
+            return NoContent();
         }
 
         [AllowAnonymous]
