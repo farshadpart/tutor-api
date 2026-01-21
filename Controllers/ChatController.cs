@@ -73,12 +73,12 @@ namespace Tutor.Api.Controllers
                 {
                     "user" => new UserChatMessage(message.Content),
                     "assistant" => new AssistantChatMessage(message.Content),
-                    "system" => new SystemChatMessage(message.Content),
                     _ => throw new Exception($"{message.Role} is not supported!")
                 };
                 chatGptChat.Add(chatGptMessage);
             }
-            
+            chatGptChat.Add(new SystemChatMessage(Prompts.SYSTEM_PROMPT));
+
             return Ok(await _chatGptChatService.ChatAsync([.. chatGptChat], userId));
         }
     }
