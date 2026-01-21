@@ -33,6 +33,11 @@ namespace Tutor.Api.Controllers
                 return BadRequest("The user is not valid!");
             }
 
+            if(voice.Length >= Limit.MAX_VOICE_SIZE)
+            {
+                return BadRequest($"A voice message size should be less the {Limit.MAX_VOICE_SIZE / 3}MB.");
+            }
+
             return Ok(await _chatGptAudioService.Transcribe(voice, userId));
         }
 
@@ -46,10 +51,14 @@ namespace Tutor.Api.Controllers
                 return BadRequest("The user is not valid!");
             }
 
-
             if (tutorChat == null || tutorChat.Length == 0)
             {
                 return BadRequest("Chat messages cannot be null or empty.");
+            }
+
+            if(tutorChat.Any(x => !x.Role.Equals("system") && x.Content.Length >= Limit.MAX_MESSAGE_LENGTH))
+            {
+                return BadRequest($"Chat messages should be less than {Limit.MAX_MESSAGE_LENGTH} characters.");
             }
 
             var chatGptChat = new List<ChatMessage>();
