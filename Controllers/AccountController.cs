@@ -35,8 +35,8 @@ namespace Tutor.Api.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] RequestLogin requestLogin)
         {
-            var identityUser = await _userManager.FindByEmailAsync(requestLogin.Email);
-            
+            var identityUser = await _userManager.FindByEmailAsync(requestLogin.Email) ?? await _userManager.FindByNameAsync(requestLogin.Email);
+
             if (identityUser is null)
             {
                 return Unauthorized("Invalid email or password!");

@@ -48,6 +48,7 @@ namespace Tutor.Api
             builder.Services.AddControllers();
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
+            builder.Services.AddScoped<PrerequisitesService>();
             builder.Services.AddScoped<ChatGptAudioService>();
             builder.Services.AddScoped<ChatGptChatService>();
             builder.Services.AddScoped<SubscriptionService>();
@@ -57,6 +58,12 @@ namespace Tutor.Api
             builder.Services.AddSerilog();
 
             var app = builder.Build();
+
+            using (var scope = app.Services.CreateScope())
+            {
+                var prerequisitesService = scope.ServiceProvider.GetRequiredService<PrerequisitesService>();
+                prerequisitesService.InsertInitialData().GetAwaiter().GetResult();
+            }
 
             app.UseExceptionHandlingMiddleware();
             // Configure the HTTP request pipeline.
