@@ -5,11 +5,23 @@ using Tutor.Api.Models.Subscriptions;
 
 namespace Tutor.Api.Data
 {
-    public class TutorContext : IdentityDbContext<User>
+    public class TutorContext(DbContextOptions<TutorContext> Options) : IdentityDbContext<User>(Options)
     {
-        public TutorContext(DbContextOptions<TutorContext> options) : base(options) { }
+        public DbSet<Subscription> Subscriptions => Set<Subscription>();
+        public DbSet<Cycle> Cycles => Set<Cycle>();
+        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
-        public DbSet<Subscription> Subscriptions { get; set; }
-        public DbSet<Cycle> Cycles { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+
+            builder.Entity<RefreshToken>()
+                .HasIndex(x => x.TokenHash)
+                .IsUnique();
+
+            builder.Entity<RefreshToken>()
+                .HasIndex(x => new { x.UserId, x.ExpiresAt });
+        }
     }
 }

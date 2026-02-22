@@ -48,6 +48,8 @@ namespace Tutor.Api
             builder.Services.AddControllers();
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
+            builder.Services.AddScoped<AccountService>();
+            builder.Services.AddScoped<RefreshTokenService>();
             builder.Services.AddScoped<PrerequisitesService>();
             builder.Services.AddScoped<ChatGptAudioService>();
             builder.Services.AddScoped<ChatGptChatService>();

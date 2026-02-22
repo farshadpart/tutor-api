@@ -8,19 +8,12 @@ namespace Tutor.Api.Controllers
     [Authorize]
     [ApiController]
     [Route("[controller]")]
-    public class SubscriptionController : ControllerBase
+    public class SubscriptionController(SubscriptionService SubscriptionService) : ControllerBase
     {
-        private readonly SubscriptionService _subscriptionService;
-
-        public SubscriptionController(SubscriptionService subscriptionService)
-        {
-            _subscriptionService = subscriptionService;
-        }
-
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] CreateSubscriptionRequest createRequest)
         {
-            await _subscriptionService.Create(createRequest);
+            await SubscriptionService.Create(createRequest);
             return NoContent();
         }
 
@@ -28,7 +21,7 @@ namespace Tutor.Api.Controllers
         [HttpGet("getSubscriptionGroups")]
         public IActionResult GetSubscriptionGroups()
         {
-            return Ok(_subscriptionService.GetSubscriptionGroups());
+            return Ok(SubscriptionService.GetSubscriptionGroups());
         }
     }
 }

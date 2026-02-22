@@ -1,10 +1,6 @@
 ﻿namespace Tutor.Api.Models.Exceptions
 {
-    public class TutorException : Exception
+    public class TutorException(string message) : Exception(message)
     {
-        public TutorException(string message) : base(message)
-        {
-            
-        }
     }
 }

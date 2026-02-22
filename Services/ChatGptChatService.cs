@@ -17,7 +17,7 @@ namespace Tutor.Api.Services
         {
             await _subscriptionService.Assert(userId);
 
-            ChatCompletionOptions options = new ChatCompletionOptions()
+            ChatCompletionOptions options = new()
             {
                 Temperature = 0.7f,
                 MaxOutputTokenCount = 1024
