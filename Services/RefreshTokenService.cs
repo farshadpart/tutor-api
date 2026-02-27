@@ -16,22 +16,23 @@ namespace Tutor.Api.Services
 
         public List<RefreshToken> GetRefreshTokens(Func<RefreshToken, bool> func)
         {
-            return [..TutorContext.RefreshTokens.Include(x => x.User).Where(func)];
+            return [.. TutorContext.RefreshTokens.Include(x => x.User).Where(func)];
         }
 
-        public async Task RevokeAllUserRefreshTokens(string userId, string ip)
+        public async Task RevokeAllUserRefreshTokens(string refreshTokenHash, string ip)
         {
-            var activeTokens = await TutorContext.RefreshTokens
-                .Where(x => x.UserId == userId && x.RevokedAt == null && x.ExpiresAt > DateTime.UtcNow)
-                .ToListAsync();
-
-            foreach (var t in activeTokens)
-            {
-                t.RevokedAt = DateTime.UtcNow;
-                t.RevokedByIp = ip;
-            }
-
-            await TutorContext.SaveChangesAsync();
+            var now = DateTime.UtcNow;
+            await TutorContext.RefreshTokens
+                .Where(t =>
+                    t.CreatedByIp == ip &&
+                    t.RevokedAt == null &&
+                    t.ExpiresAt > now &&
+                    TutorContext.RefreshTokens.Any(x =>
+                        x.TokenHash == refreshTokenHash &&
+                        x.UserId == t.UserId))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(t => t.RevokedAt, now)
+                    .SetProperty(t => t.RevokedByIp, ip));
         }
 
         public async Task<RefreshTokenHolder> CreateRefreshToken(User user, string ip, string userAgent)

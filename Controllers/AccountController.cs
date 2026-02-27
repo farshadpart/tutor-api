@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
 using Tutor.Api.Services;
+using Tutor.Api.Utilities;
 
 namespace Tutor.Api.Controllers
 {
@@ -82,7 +83,8 @@ namespace Tutor.Api.Controllers
         public async Task<IActionResult> Logout([FromBody] RefreshRequest req)
         {
             var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            await RefreshTokenService.RevokeAllUserRefreshTokens(req.RefreshToken, ip);
+            var refreshTokenHash = TokenHelpers.Sha256(req.RefreshToken);
+            await RefreshTokenService.RevokeAllUserRefreshTokens(refreshTokenHash, ip);
             return NoContent();
         }
 
