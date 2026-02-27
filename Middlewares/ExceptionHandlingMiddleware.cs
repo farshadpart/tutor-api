@@ -7,32 +7,23 @@
     using System.Threading.Tasks;
     using Tutor.Api.Models.Exceptions;
 
-    public class ExceptionHandlingMiddleware
+    public class ExceptionHandlingMiddleware(RequestDelegate Next, ILogger<ExceptionHandlingMiddleware> Logger)
     {
-        private readonly RequestDelegate _next;
-        private readonly ILogger<ExceptionHandlingMiddleware> _logger;
-
-        public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
-        {
-            _next = next;
-            _logger = logger;
-        }
-
         public async Task InvokeAsync(HttpContext context)
         {
             try
             {
-                await _next(context);
+                await Next(context);
             }
             catch (TutorException ex)
             {
-                _logger.LogWarning(ex, "TutorException: {exceptionMessage}", ex.Message);
+                Logger.LogWarning(ex, "TutorException: {exceptionMessage}", ex.Message);
                 context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-                await _next(context);
+                await Next(context);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unhandled exception");
+                Logger.LogError(ex, "Unhandled exception");
 
                 context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
                 context.Response.ContentType = "application/json";

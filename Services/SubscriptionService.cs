@@ -30,7 +30,8 @@ namespace Tutor.Api.Services
 
             if(user.Subscriptions.Any(x => x.Group.Equals(createRequest.SubscriptionGroup)))
             {
-                _logger.LogError($"The user with id {createRequest.UserId} already has a subscription with typeId: {createRequest.SubscriptionGroup}");
+                _logger.LogError("The user with id {createRequest.UserId} already has a subscription with typeId: {createRequest.SubscriptionGroup}",
+                    createRequest.UserId, createRequest.SubscriptionGroup);
                 throw new TutorException(Errors.USER_ALREADY_HAS_SUBSCRIPTION);
             }
 

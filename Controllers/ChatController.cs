@@ -10,26 +10,15 @@ namespace Tutor.Api.Controllers
     [Authorize]
     [ApiController]
     [Route("[controller]")]
-    public class ChatController : ControllerBase
+    public class ChatController(ChatGptAudioService ChatGptAudioService, ChatGptChatService ChatGptChatService, ILogger<ChatController> Logger) : ControllerBase
     {
-        private readonly ChatGptAudioService _chatGptAudioService;
-        private readonly ChatGptChatService _chatGptChatService;
-        private readonly ILogger<ChatController> _logger;
-
-        public ChatController(ChatGptAudioService chatGptAudioService, ChatGptChatService chatGptChatService, ILogger<ChatController> logger)
-        {
-            _chatGptAudioService = chatGptAudioService;
-            _chatGptChatService = chatGptChatService;
-            _logger = logger;
-        }
-
         [HttpPost("speak")]
         public async Task<IActionResult> Speak([FromForm] IFormFile voice)
         {
             string? userId = User.GetClaimValue(TutorClaimTypes.Id);
             if (userId is null)
             {
-                _logger.LogError("The logged in user is not valid! User: {@user}", User);
+                Logger.LogError("The logged in user is not valid! User: {@user}", User);
                 return BadRequest("The user is not valid!");
             }
 
@@ -38,7 +27,7 @@ namespace Tutor.Api.Controllers
                 return BadRequest($"A voice message size should be less the {Limit.MAX_VOICE_SIZE / 3}MB.");
             }
 
-            return Ok(await _chatGptAudioService.Transcribe(voice, userId));
+            return Ok(await ChatGptAudioService.Transcribe(voice, userId));
         }
 
         [HttpPost("write")]
@@ -47,7 +36,7 @@ namespace Tutor.Api.Controllers
             string? userId = User.GetClaimValue(TutorClaimTypes.Id);
             if( userId is null)
             {
-                _logger.LogError("The logged in user is not valid! User: {@user}", User);
+                Logger.LogError("The logged in user is not valid! User: {@user}", User);
                 return BadRequest("The user is not valid!");
             }
 
@@ -79,7 +68,7 @@ namespace Tutor.Api.Controllers
             }
             chatGptChat.Add(new SystemChatMessage(Prompts.SYSTEM_PROMPT));
 
-            return Ok(await _chatGptChatService.ChatAsync([.. chatGptChat], userId));
+            return Ok(await ChatGptChatService.ChatAsync([.. chatGptChat], userId));
         }
     }
 }

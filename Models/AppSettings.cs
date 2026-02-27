@@ -18,7 +18,8 @@
     public record JWT {
         public string Issuer { get; set; } = string.Empty;
         public string Audience { get; set; } = string.Empty;
-        public uint ExpirationMinutes { get; set; }
+        public uint AccessTokenExpirationMinutes { get; set; }
+        public uint RefreshTokenExpirationDays { get; set; }
         public string SecretKey { get; set; } = string.Empty;
     }
 }

@@ -1,13 +1,7 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using FluentResults;
+using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.JsonWebTokens;
-using Microsoft.IdentityModel.Tokens;
-using System.Net.Mail;
-using System.Security.Claims;
-using System.Text;
-using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
-using Tutor.Api.Models.Constants;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
 using Tutor.Api.Services;
 
@@ -15,108 +9,39 @@ namespace Tutor.Api.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class AccountController : ControllerBase
+    public class AccountController(AccountService AccountService, RefreshTokenService RefreshTokenService, ILogger<AccountController> Logger) : ControllerBase
     {
-        private readonly UserManager<User> _userManager;
-        private readonly IEmailSender<User> _emailSender;
-        private readonly ILogger<AccountController> _logger;
-        private readonly AppSettings _appSettings;
-        private readonly SubscriptionService _subscriptionService;
-
-        public AccountController(UserManager<User> userManager, IEmailSender<User> emailSender, ILogger<AccountController> logger, AppSettings appSettings, SubscriptionService subscriptionService)
-        {
-            _userManager = userManager;
-            _emailSender = emailSender;
-            _logger = logger;
-            _appSettings = appSettings;
-            _subscriptionService = subscriptionService;
-        }
-
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] RequestLogin requestLogin)
         {
-            var identityUser = await _userManager.FindByEmailAsync(requestLogin.Email) ?? await _userManager.FindByNameAsync(requestLogin.Email);
-
-            if (identityUser is null)
+            var userResult = await AccountService.ValidateLoginRequest(requestLogin);
+            if (userResult.IsFailed)
             {
-                return Unauthorized("Invalid email or password!");
-            }
-            var passwordValid = await _userManager.CheckPasswordAsync(identityUser, requestLogin.Password);
-            if (!passwordValid)
-            {
-                return Unauthorized("Invalid email or password!");
-            }
-            if (!await _userManager.IsEmailConfirmedAsync(identityUser))
-            {
-                return Unauthorized("Email not confirmed!");
+                return ToActionResult(userResult);
             }
 
-            var userRoles = await _userManager.GetRolesAsync(identityUser);
-            var userClaims = await _userManager.GetClaimsAsync(identityUser);
+            var accessToken = await AccountService.CreateAccessToken(userResult.Value);
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var ua = Request.Headers.UserAgent.ToString();
+            var refreshToken = await RefreshTokenService.CreateRefreshToken(userResult.Value, ip, ua);
 
-            var singingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_appSettings.Jwt.SecretKey));
-            var credentials = new SigningCredentials(singingKey, SecurityAlgorithms.HmacSha256);
-            List<Claim> claims = [];
-
-            claims.Add(new Claim(ClaimTypes.Email, requestLogin.Email));
-            claims.Add(new Claim(TutorClaimTypes.Id, identityUser.Id));
-            var userSubscriptionGroup = _subscriptionService.GetUserUseableSubscriptionGroup(identityUser.Id)?.ToString();
-            if(userSubscriptionGroup is not null)
-            {
-                claims.Add(new Claim(TutorClaimTypes.SubscriptionGroup, userSubscriptionGroup));
-            }
-            claims.AddRange(userClaims);
-            foreach (var role in userRoles) 
-            {
-                claims.Add(new Claim(ClaimTypes.Role, role));
-            }
-
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddMinutes(_appSettings.Jwt.ExpirationMinutes),
-                SigningCredentials = credentials,
-                Issuer = _appSettings.Jwt.Issuer,
-                Audience = _appSettings.Jwt.Audience,
-                IssuedAt = DateTime.UtcNow
-            };
-            
-            return Ok(new { accessToken = new JsonWebTokenHandler().CreateToken(tokenDescriptor) });
+            return Ok(new TokenHolder(accessToken, refreshToken));
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RequestCreateUser requestCreateUser)
         {
-            if(!MailAddress.TryCreate(requestCreateUser.Email, out _))
+            var registerResult = await AccountService.Register(requestCreateUser);
+            if (registerResult.IsFailed)
             {
-                return BadRequest("The entered email address is not valid!");
+                return ToActionResult(registerResult);
             }
 
-            var identityUser = new User
-            {
-                UserName = requestCreateUser.Email,
-                NormalizedUserName = requestCreateUser.Email.ToUpper(),
-                Email = requestCreateUser.Email,
-                NormalizedEmail = requestCreateUser.Email.ToUpper()
-            };
-            var identityResult = await _userManager.CreateAsync(identityUser, requestCreateUser.Password);
-
-            if (!identityResult.Succeeded)
-            {
-                return BadRequest(identityResult.Errors);
-            }
-
-            var token = await _userManager.GenerateEmailConfirmationTokenAsync(identityUser);
-            if (string.IsNullOrEmpty(token))
-            {
-                _logger.LogError("Method GenerateEmailConfirmationTokenAsync failed to generate the confirmation token!");
-                throw new Exception("Method GenerateEmailConfirmationTokenAsync failed to generate the confirmation token!");
-            }
-
+            var (identityUser, token) = registerResult.Value;
             var confirmationLink = Url.Action("ConfirmEmail", "Account", new { userId = identityUser.Id, token }, Request.Scheme);
             if (confirmationLink is null)
             {
-                _logger.LogError("Failed to generate confirmation link for user {UserId}", identityUser.Id);
+                Logger.LogError("Failed to generate confirmation link for user {UserId}", identityUser.Id);
                 return StatusCode(500, "Something went wrong!");
             }
 
@@ -124,26 +49,72 @@ namespace Tutor.Api.Controllers
             await _emailSender.SendConfirmationLinkAsync(identityUser, identityUser.Email, confirmationLink);
 #endif
 
-            return Ok();
+            return Ok("User registered successfully! Please check your email to confirm your account.");
         }
 
-        [HttpGet("ConfirmEmail")]
+        [HttpGet("confirmEmail")]
         public async Task<IActionResult> ConfirmEmail(string userId, string token)
         {
-            var identityUser = await _userManager.FindByIdAsync(userId);
-            if (identityUser is null)
+            var confirmResult = await AccountService.ConfirmEmail(userId, token);
+            if (confirmResult.IsFailed)
             {
-                _logger.LogError("Try to confirm invalid userId: {userId}", userId);
-                return BadRequest("Something went wrong!");
-            }
-            var identityResult = await _userManager.ConfirmEmailAsync(identityUser, token);
-            if (!identityResult.Succeeded)
-            {
-                _logger.LogError("Tried to confirm userId: {userId} with invalide code: {invalidCode}", userId, token);
-                return BadRequest("Something went wrong!");
+                return ToActionResult(confirmResult);
             }
 
             return Ok("Email confirmed successfully!");
+        }
+
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh([FromBody] RefreshRequest req)
+        {
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var ua = Request.Headers.UserAgent.ToString();
+
+            var result = await AccountService.RefreshAsync(req.RefreshToken, ip, ua);
+            if(result.IsFailed) {
+                return ToActionResult(result);
+            }
+
+            return Ok(result.Value);
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout([FromBody] RefreshRequest req)
+        {
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await RefreshTokenService.RevokeAllUserRefreshTokens(req.RefreshToken, ip);
+            return NoContent();
+        }
+
+        private IActionResult ToActionResult(Result result)
+        {
+            if (!result.Errors[0].Metadata.TryGetValue("MethodName", out var methodName))
+            {
+                return BadRequest(result.Errors);
+            }
+
+            return methodName switch
+            {
+                "InternalServerError" => StatusCode(500, result.Errors),
+                "BadReqeust" => BadRequest(result.Errors),
+                "Unauthorized" => Unauthorized(result.Errors),
+                _ => BadRequest(result.Errors),
+            };
+        }
+
+        private IActionResult ToActionResult<T>(Result<T> result)
+        {
+            if (!result.Errors[0].Metadata.TryGetValue("MethodName", out var methodName))
+            {
+                return BadRequest(result.Errors);
+            }
+
+            return methodName switch
+            {
+                "BadReqeust" => BadRequest(result.Errors),
+                "Unauthorized" => Unauthorized(result.Errors),
+                _ => BadRequest(result.Errors),
+            };
         }
     }
 }
