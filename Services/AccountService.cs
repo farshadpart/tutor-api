@@ -100,7 +100,7 @@ namespace Tutor.Api.Services
 
             var existing = _refreshTokenService.GetRefreshTokens(x => x.TokenHash == incomingHash).FirstOrDefault();
 
-            if (existing == null)
+            if (existing == null || existing.User is null)
             {
                 IError authorizationError = new Error("Refresh token is not valid!")
                     .WithMetadata("MethodName", "Unauthorized");
