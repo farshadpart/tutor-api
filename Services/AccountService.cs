@@ -114,7 +114,7 @@ namespace Tutor.Api.Services
                 return Result.Fail(authorizationError);
             }
 
-            await _refreshTokenService.RevokeAllUserRefreshTokens(existing.UserId, ip);
+            await _refreshTokenService.RevokeAllUserRefreshTokens(existing.TokenHash, ip);
             var user = existing.User;
 
             var newRefreshRaw = TokenHelpers.GenerateRefreshToken();
