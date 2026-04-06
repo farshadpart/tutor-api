@@ -127,6 +127,7 @@ namespace Tutor.Api.Services
         {
             var activeCycle = _tutorContext.Users.Include(x => x.Subscriptions)
                 .ThenInclude(x => x.Cycles)
+                .AsSingleQuery()
                 .FirstOrDefault(x => x.Id.Equals(userId))?.Subscriptions.SelectMany(x => x.Cycles)
                 .FirstOrDefault(x => x.Status.Equals(CycleStatus.Active));
 
@@ -151,6 +152,7 @@ namespace Tutor.Api.Services
             var useableSubscription = _tutorContext.Users
                 .Include(x => x.Subscriptions)
                 .ThenInclude(x => x.Cycles)
+                .AsSingleQuery()
                 .FirstOrDefault(x => x.Id.Equals(userId))?.Subscriptions
                 .FirstOrDefault(x => x.Cycles.OrderBy(x => x.CreatedAt).Any(c => c.Status.Equals(CycleStatus.Active) || c.Status.Equals(CycleStatus.Queued)));
 
