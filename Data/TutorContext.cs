@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Subscriptions;
 
@@ -32,6 +33,16 @@ namespace Tutor.Api.Data
 
             builder.Entity<RefreshToken>()
                 .HasIndex(x => new { x.UserId, x.ExpiresAt });
+
+            foreach (var entityType in builder.Model.GetEntityTypes())
+            {
+                if (typeof(IRowVersion).IsAssignableFrom(entityType.ClrType))
+                {
+                    builder.Entity(entityType.ClrType)
+                        .Property<uint>("xmin")
+                        .IsRowVersion();
+                }
+            }
         }
     }
 }
