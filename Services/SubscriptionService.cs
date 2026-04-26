@@ -91,7 +91,7 @@ namespace Tutor.Api.Services
 
         public async Task Assert(string userId)
         {
-            await _userStateService.AssertAsync(userId);
+            await _userStateService.AssertUserSubscriptionAsync(userId);
         }
     }
 }
