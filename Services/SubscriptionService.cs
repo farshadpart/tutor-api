@@ -9,13 +9,13 @@ namespace Tutor.Api.Services
 {
     public class SubscriptionService
     {
-        private readonly UserStateService _userStateService;
+        private readonly SubscriptionAssertionService subscriptionAssertionService;
         private readonly TutorContext _tutorContext;
         private readonly ILogger<SubscriptionService> _logger;
 
-        public SubscriptionService(UserStateService userStateService, TutorContext tutorContext, ILogger<SubscriptionService> logger)
+        public SubscriptionService(SubscriptionAssertionService subscriptionAssertionService, TutorContext tutorContext, ILogger<SubscriptionService> logger)
         {
-            _userStateService = userStateService;
+            this.subscriptionAssertionService = subscriptionAssertionService;
             _tutorContext = tutorContext;
             _logger = logger;
         }
@@ -91,7 +91,7 @@ namespace Tutor.Api.Services
 
         public async Task Assert(string userId)
         {
-            await _userStateService.AssertUserSubscriptionAsync(userId);
+            await subscriptionAssertionService.AssertUserSubscriptionAsync(userId);
         }
     }
 }

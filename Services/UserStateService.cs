@@ -8,14 +8,14 @@
     using Tutor.Api.Models.Exceptions;
     using Tutor.Api.Models.Subscriptions;
 
-    public class UserStateService
+    public class SubscriptionAssertionService
     {
         private readonly IServiceScopeFactory _scopeFactory;
-        private readonly ILogger<UserStateService> _logger;
+        private readonly ILogger<SubscriptionAssertionService> _logger;
         private readonly ConcurrentDictionary<string, User> _cache = [];
         private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
 
-        public UserStateService(IServiceScopeFactory scopeFactory, ILogger<UserStateService> logger)
+        public SubscriptionAssertionService(IServiceScopeFactory scopeFactory, ILogger<SubscriptionAssertionService> logger)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;

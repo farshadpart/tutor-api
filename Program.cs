@@ -54,6 +54,7 @@ namespace Tutor.Api
             builder.Services.AddScoped<ChatGptAudioService>();
             builder.Services.AddScoped<ChatGptChatService>();
             builder.Services.AddScoped<SubscriptionService>();
+            builder.Services.AddSingleton<SubscriptionAssertionService>();
             builder.Services.Configure<AppSettings>(builder.Configuration);
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<AppSettings>>().Value);
             builder.Services.AddScoped<IEmailSender<User>, EmailSender>();
