@@ -1,10 +1,13 @@
 
+using Medallion.Threading;
+using Medallion.Threading.Redis;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
+using StackExchange.Redis;
 using System.Text;
 using Tutor.Api.Data;
 using Tutor.Api.Middlewares;
@@ -58,6 +61,8 @@ namespace Tutor.Api
             builder.Services.Configure<AppSettings>(builder.Configuration);
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<AppSettings>>().Value);
             builder.Services.AddScoped<IEmailSender<User>, EmailSender>();
+            builder.Services.AddSingleton<IDistributedLockProvider>(
+                _ => new RedisDistributedSynchronizationProvider(ConnectionMultiplexer.Connect("localhost:6379").GetDatabase()));
             builder.Services.AddSerilog();
 
             var app = builder.Build();

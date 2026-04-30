@@ -1,7 +1,12 @@
 ﻿namespace Tutor.Api.Services
 {
     using Baksteen.Extensions.DeepCopy;
+    using Medallion.Threading;
+    using Medallion.Threading.Redis;
     using Microsoft.EntityFrameworkCore;
+    using MongoDB.Driver.Core.Configuration;
+    using org.apache.zookeeper.data;
+    using StackExchange.Redis;
     using System.Collections.Concurrent;
     using Tutor.Api.Data;
     using Tutor.Api.Models.Account;
@@ -13,21 +18,19 @@
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<SubscriptionAssertionService> _logger;
         private readonly ConcurrentDictionary<string, User> _cache = [];
-        private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+        private readonly IDistributedLockProvider _lockProvider;
 
-        public SubscriptionAssertionService(IServiceScopeFactory scopeFactory, ILogger<SubscriptionAssertionService> logger)
+        public SubscriptionAssertionService(IServiceScopeFactory scopeFactory, ILogger<SubscriptionAssertionService> logger, IDistributedLockProvider lockProvider)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
+            _lockProvider = lockProvider;
         }
 
         public async Task AssertUserSubscriptionAsync(string userId)
         {
-            var safetyTimeout = TimeSpan.FromSeconds(10);
-            var semaphore = _locks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
-            await semaphore.WaitAsync();
-
-            try
+            IDistributedLockProvider lockProvider = new RedisDistributedSynchronizationProvider(ConnectionMultiplexer.Connect("localhost:6379").GetDatabase());
+            using (_lockProvider.AcquireLock($"UserAccount:{userId}"))
             {
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var tutorContext = scope.ServiceProvider.GetRequiredService<TutorContext>();
@@ -49,14 +52,6 @@
                 if (!await ValidateAndUpdateQueuedCycle(user, queuedCycle, tutorContext))
                 {
                     throw new Exception(Errors.FAILED_VALIDATE_QUEUED_CYCLE);
-                }
-            }
-            finally
-            {
-                semaphore.Release();
-                if (semaphore.CurrentCount == 1)
-                {
-                    _locks.TryRemove(userId, out _);
                 }
             }
         }
