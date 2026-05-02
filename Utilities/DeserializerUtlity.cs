@@ -4,7 +4,7 @@ namespace Tutor.Api.Utilities
 {
     public static class DeserializerUtlity
     {
-        public static T? Deserialize<T, U>(string json, ILogger<U> logger)
+        public static T? Deserialize<T, U>(this string json, ILogger<U> logger)
         {
             var deserialized = JsonSerializer.Deserialize<T>(json);
             if (deserialized is null)

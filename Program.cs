@@ -61,8 +61,9 @@ namespace Tutor.Api
             builder.Services.Configure<AppSettings>(builder.Configuration);
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<AppSettings>>().Value);
             builder.Services.AddScoped<IEmailSender<User>, EmailSender>();
-            builder.Services.AddSingleton<IDistributedLockProvider>(
-                _ => new RedisDistributedSynchronizationProvider(ConnectionMultiplexer.Connect("localhost:6379").GetDatabase()));
+            builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect("localhost:6379"));
+            builder.Services.AddSingleton(sp => sp.GetRequiredService<IConnectionMultiplexer>().GetDatabase());
+            builder.Services.AddSingleton<IDistributedLockProvider>(sp => new RedisDistributedSynchronizationProvider(sp.GetRequiredService<IDatabase>()));
             builder.Services.AddSerilog();
 
             var app = builder.Build();

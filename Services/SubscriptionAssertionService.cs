@@ -4,27 +4,27 @@
     using Medallion.Threading;
     using Medallion.Threading.Redis;
     using Microsoft.EntityFrameworkCore;
-    using MongoDB.Driver.Core.Configuration;
-    using org.apache.zookeeper.data;
     using StackExchange.Redis;
-    using System.Collections.Concurrent;
+    using System.Text.Json;
     using Tutor.Api.Data;
     using Tutor.Api.Models.Account;
     using Tutor.Api.Models.Exceptions;
     using Tutor.Api.Models.Subscriptions;
+    using Tutor.Api.Utilities;
 
     public class SubscriptionAssertionService
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<SubscriptionAssertionService> _logger;
-        private readonly ConcurrentDictionary<string, User> _cache = [];
         private readonly IDistributedLockProvider _lockProvider;
+        private readonly IDatabase _cacheDb;
 
-        public SubscriptionAssertionService(IServiceScopeFactory scopeFactory, ILogger<SubscriptionAssertionService> logger, IDistributedLockProvider lockProvider)
+        public SubscriptionAssertionService(IServiceScopeFactory scopeFactory, ILogger<SubscriptionAssertionService> logger, IDistributedLockProvider lockProvider, IDatabase cacheDb)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
             _lockProvider = lockProvider;
+            _cacheDb = cacheDb;
         }
 
         public async Task AssertUserSubscriptionAsync(string userId)
@@ -125,9 +125,11 @@
 
         private async Task<User> GetUserAsync(string userId, TutorContext tutorContext)
         {
-            if (_cache.TryGetValue(userId, out var userCached))
+            var redisUserValue = await _cacheDb.StringGetAsync(GetKey(userId));
+
+            if (redisUserValue.HasValue)
             {
-                return userCached.DeepCopy() ?? throw new Exception(Errors.DEEP_CLONE_FAILED); ;
+                return redisUserValue.ToString().Deserialize<User, SubscriptionAssertionService>(_logger) ?? throw new Exception(Errors.SOMETHING_WENT_WRONG);
             }
 
             var user = await tutorContext.Users
@@ -142,10 +144,7 @@
                 throw new TutorException(Errors.USER_NOT_FOUND);
             }
 
-            var userCloned = user.DeepCopy() ?? throw new Exception(Errors.DEEP_CLONE_FAILED);
-            _cache[userId] = userCloned;
-
-            return userCloned;
+            return user.DeepCopy() ?? throw new Exception(Errors.DEEP_CLONE_FAILED);
         }
 
         private async Task UpdateDb(User user, Cycle cycle, TutorContext tutorContext)
@@ -155,13 +154,19 @@
                 tutorContext.Entry(cycle).State = EntityState.Modified;
                 tutorContext.Update(cycle);
                 await tutorContext.SaveChangesAsync();
-                _cache[user.Id] = user;
+                var userSerialized = JsonSerializer.Serialize(user);
+                await _cacheDb.StringSetAsync(GetKey(user.Id), userSerialized);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred while updating the cycle with id: {cycleId} in the database!", cycle.Id);
                 throw;
             }
+        }
+
+        private static string GetKey(string userId)
+        {
+            return $"tutor:user:{userId}";
         }
     }
 
