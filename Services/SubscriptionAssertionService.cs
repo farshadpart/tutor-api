@@ -29,7 +29,6 @@
 
         public async Task AssertUserSubscriptionAsync(string userId)
         {
-            IDistributedLockProvider lockProvider = new RedisDistributedSynchronizationProvider(ConnectionMultiplexer.Connect("localhost:6379").GetDatabase());
             using (_lockProvider.AcquireLock($"UserAccount:{userId}"))
             {
                 await using var scope = _scopeFactory.CreateAsyncScope();
