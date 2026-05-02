@@ -1,10 +1,13 @@
 
+using Medallion.Threading;
+using Medallion.Threading.Redis;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
+using StackExchange.Redis;
 using System.Text;
 using Tutor.Api.Data;
 using Tutor.Api.Middlewares;
@@ -26,7 +29,7 @@ namespace Tutor.Api
 
             builder.Services.AddDbContext<TutorContext>(options =>
                     options.UseNpgsql(builder.Configuration.GetConnectionString("TutorContext")
-                        ?? throw new InvalidOperationException("Connection string 'TutorContext' not found.")
+                        ?? throw new InvalidOperationException("Connection string: 'TutorContext' not found.")
                 )
             );
 
@@ -54,9 +57,14 @@ namespace Tutor.Api
             builder.Services.AddScoped<ChatGptAudioService>();
             builder.Services.AddScoped<ChatGptChatService>();
             builder.Services.AddScoped<SubscriptionService>();
+            builder.Services.AddSingleton<SubscriptionAssertionService>();
             builder.Services.Configure<AppSettings>(builder.Configuration);
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<AppSettings>>().Value);
             builder.Services.AddScoped<IEmailSender<User>, EmailSender>();
+            builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")
+                        ?? throw new InvalidOperationException("Connection string: 'Redis' not found.")));
+            builder.Services.AddSingleton(sp => sp.GetRequiredService<IConnectionMultiplexer>().GetDatabase());
+            builder.Services.AddSingleton<IDistributedLockProvider>(sp => new RedisDistributedSynchronizationProvider(sp.GetRequiredService<IDatabase>()));
             builder.Services.AddSerilog();
 
             var app = builder.Build();
