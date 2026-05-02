@@ -57,7 +57,9 @@ namespace Tutor.Api.Services
 
         public async Task RegisterRequest(string userId)
         {
-            var activeCycle = _tutorContext.Users.Include(x => x.Subscriptions)
+            var activeCycle = _tutorContext.Users
+                .AsSplitQuery()
+                .Include(x => x.Subscriptions)
                 .ThenInclude(x => x.Cycles)
                 .FirstOrDefault(x => x.Id.Equals(userId))?.Subscriptions.SelectMany(x => x.Cycles)
                 .FirstOrDefault(x => x.Status.Equals(CycleStatus.Active));
@@ -81,6 +83,7 @@ namespace Tutor.Api.Services
         public SubscriptionGroup? GetUserUseableSubscriptionGroup(string userId)
         {
             var useableSubscription = _tutorContext.Users
+                .AsSplitQuery()
                 .Include(x => x.Subscriptions)
                 .ThenInclude(x => x.Cycles)
                 .FirstOrDefault(x => x.Id.Equals(userId))?.Subscriptions

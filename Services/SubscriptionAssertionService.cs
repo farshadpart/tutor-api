@@ -133,6 +133,7 @@
 
             var user = await tutorContext.Users
                                 .AsNoTracking()
+                                .AsSplitQuery()
                                 .Include(x => x.Subscriptions)
                                 .ThenInclude(x => x.Cycles)
                                 .FirstOrDefaultAsync(x => x.Id == userId);
