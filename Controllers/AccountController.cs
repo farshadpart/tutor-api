@@ -1,4 +1,5 @@
 ﻿using FluentResults;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Tutor.Api.Models.Account;
@@ -10,7 +11,7 @@ namespace Tutor.Api.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class AccountController(AccountService AccountService, RefreshTokenService RefreshTokenService, ILogger<AccountController> Logger) : ControllerBase
+    public class AccountController(AccountService AccountService, RefreshTokenService RefreshTokenService, ILogger<AccountController> Logger, IEmailSender<User> EmailSender) : ControllerBase
     {
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] RequestLogin requestLogin)
@@ -47,7 +48,11 @@ namespace Tutor.Api.Controllers
             }
 
 #if !DEBUG
-            await _emailSender.SendConfirmationLinkAsync(identityUser, identityUser.Email, confirmationLink);
+            if(identityUser.Email is null) {
+                Logger.LogError("User {UserId} email is null, cannot send confirmation link.", identityUser.Id);
+                return StatusCode(500, "Something went wrong!");
+            }
+            await EmailSender.SendConfirmationLinkAsync(identityUser, identityUser.Email, confirmationLink);
 #endif
 
             return Ok("User registered successfully! Please check your email to confirm your account.");
