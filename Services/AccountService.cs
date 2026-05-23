@@ -66,10 +66,13 @@ namespace Tutor.Api.Services
 
             var singingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_appSettings.Jwt.SecretKey));
             var credentials = new SigningCredentials(singingKey, SecurityAlgorithms.HmacSha256);
-            List<Claim> claims = [];
+            List<Claim> claims =
+            [
+                new Claim(ClaimTypes.Email, identityUser.Email ?? string.Empty),
+                new Claim(ClaimTypes.Name, identityUser.UserName ?? string.Empty),
+                new Claim(TutorClaimTypes.Id, identityUser.Id)
+            ];
 
-            claims.Add(new Claim(ClaimTypes.Email, identityUser.Email ?? string.Empty));
-            claims.Add(new Claim(TutorClaimTypes.Id, identityUser.Id));
             var userSubscriptionGroup = _subscriptionService.GetUserUseableSubscriptionGroup(identityUser.Id);
             if (userSubscriptionGroup is not null)
             {

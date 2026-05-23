@@ -17,6 +17,7 @@ using Tutor.Api.Middlewares;
 using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Services;
+using Tutor.Api.Utilities;
 
 namespace Tutor.Api
 {
@@ -39,16 +40,17 @@ namespace Tutor.Api
             builder.Services.AddRateLimiter(options =>
             {
                 options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-                    RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: httpContext.User.FindFirstValue(ClaimTypes.Email) ??
-                                      throw new Exception("User is not authenticated."),
+                {
+                    return RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.User.GetUserIdentifier(),
                         factory: partition => new FixedWindowRateLimiterOptions
                         {
                             AutoReplenishment = true,
                             PermitLimit = 20,
                             QueueLimit = 0,
                             Window = TimeSpan.FromMinutes(1)
-                        }));
+                        });
+                });
     
                 options.OnRejected = async (context, cancellationToken) =>
                 {
