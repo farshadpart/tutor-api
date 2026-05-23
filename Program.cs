@@ -1,4 +1,5 @@
 
+using System.Globalization;
 using Medallion.Threading;
 using Medallion.Threading.Redis;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -49,17 +50,15 @@ namespace Tutor.Api
                             Window = TimeSpan.FromMinutes(1)
                         }));
     
-                options.OnRejected = (context, cancellationToken) =>
+                options.OnRejected = async (context, cancellationToken) =>
                 {
                     if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
                     {
-                        context.HttpContext.Response.Headers.RetryAfter = retryAfter.TotalSeconds.ToString();
+                        context.HttpContext.Response.Headers.RetryAfter = Math.Ceiling(retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
                     }
 
                     context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                    context.HttpContext.Response.WriteAsync("Too many requests. Please try again later.");
-
-                    return new ValueTask();
+                    await context.HttpContext.Response.WriteAsync("Too many requests. Please try again later.", cancellationToken);
                 };
             });
 
