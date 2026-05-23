@@ -8,7 +8,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using StackExchange.Redis;
+using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using Tutor.Api.Data;
 using Tutor.Api.Middlewares;
 using Tutor.Api.Models;
@@ -32,6 +34,34 @@ namespace Tutor.Api
                         ?? throw new InvalidOperationException("Connection string: 'TutorContext' not found.")
                 )
             );
+            
+            builder.Services.AddRateLimiter(options =>
+            {
+                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.User.FindFirstValue(ClaimTypes.Email) ??
+                                      throw new Exception("User is not authenticated."),
+                        factory: partition => new FixedWindowRateLimiterOptions
+                        {
+                            AutoReplenishment = true,
+                            PermitLimit = 20,
+                            QueueLimit = 0,
+                            Window = TimeSpan.FromMinutes(1)
+                        }));
+    
+                options.OnRejected = (context, cancellationToken) =>
+                {
+                    if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                    {
+                        context.HttpContext.Response.Headers.RetryAfter = retryAfter.TotalSeconds.ToString();
+                    }
+
+                    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                    context.HttpContext.Response.WriteAsync("Too many requests. Please try again later.");
+
+                    return new ValueTask();
+                };
+            });
 
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -85,6 +115,7 @@ namespace Tutor.Api
             app.UseHttpsRedirection();
 
             app.UseAuthentication();
+            app.UseRateLimiter();
             app.UseAuthorization();
 
             app.MapControllers();
