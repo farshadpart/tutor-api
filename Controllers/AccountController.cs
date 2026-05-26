@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
 using Tutor.Api.Services;
@@ -12,7 +11,6 @@ namespace Tutor.Api.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    [DisableRateLimiting]
     public class AccountController(AccountService AccountService, RefreshTokenService RefreshTokenService, ILogger<AccountController> Logger, IEmailSender<User> EmailSender) : ControllerBase
     {
         [HttpPost("login")]

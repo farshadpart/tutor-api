@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OpenAI.Chat;
 using Tutor.Api.Models.Constants;
 using Tutor.Api.Models.Tutor.Api.Contracts.ChatServices;
@@ -10,6 +11,7 @@ namespace Tutor.Api.Controllers
     [Authorize]
     [ApiController]
     [Route("[controller]")]
+    [EnableRateLimiting("Chat")]
     public class ChatController(ChatGptAudioService ChatGptAudioService, ChatGptChatService ChatGptChatService, ILogger<ChatController> Logger) : ControllerBase
     {
         [HttpPost("speak")]

@@ -39,7 +39,7 @@ namespace Tutor.Api
             
             builder.Services.AddRateLimiter(options =>
             {
-                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+                options.AddPolicy("Chat", httpContext =>
                 {
                     return RateLimitPartition.GetFixedWindowLimiter(
                         partitionKey: httpContext.User.GetUserIdentifier(),
