@@ -46,14 +46,12 @@ namespace Tutor.Api.Controllers
                 Logger.LogError("Failed to generate confirmation link for user {UserId}", identityUser.Id);
                 return StatusCode(500, "Something went wrong!");
             }
-
-#if !DEBUG
+            
             if(identityUser.Email is null) {
                 Logger.LogError("User {UserId} email is null, cannot send confirmation link.", identityUser.Id);
                 return StatusCode(500, "Something went wrong!");
             }
             await EmailSender.SendConfirmationLinkAsync(identityUser, identityUser.Email, confirmationLink);
-#endif
 
             return Ok("User registered successfully! Please check your email to confirm your account.");
         }
