@@ -35,6 +35,19 @@ namespace Tutor.Api.Services
                     .SetProperty(t => t.RevokedByIp, ip));
         }
 
+        public async Task RevokeAllUserRefreshTokensByUserId(string userId, string ip)
+        {
+            var now = DateTime.UtcNow;
+            await TutorContext.RefreshTokens
+                .Where(t =>
+                    t.UserId == userId &&
+                    t.RevokedAt == null &&
+                    t.ExpiresAt > now)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(t => t.RevokedAt, now)
+                    .SetProperty(t => t.RevokedByIp, ip));
+        }
+
         public async Task<RefreshTokenHolder> CreateRefreshToken(User user, string ip, string userAgent)
         {
             var refreshRaw = TokenHelpers.GenerateRefreshToken();
