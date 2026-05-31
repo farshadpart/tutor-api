@@ -68,6 +68,46 @@ namespace Tutor.Api.Controllers
             return Ok("Email confirmed successfully!");
         }
 
+        [HttpPost("forgotPassword")]
+        public async Task<IActionResult> ForgotPassword([FromBody] RequestForgotPassword requestForgotPassword)
+        {
+            var resetTokenResult = await AccountService.GeneratePasswordResetToken(requestForgotPassword);
+            if (resetTokenResult.IsFailed)
+            {
+                if (resetTokenResult.Errors[0].Metadata.TryGetValue("MethodName", out var methodName) &&
+                    methodName as string == "NotFound")
+                {
+                    return Ok("If an account exists for this email, a password reset link has been sent.");
+                }
+
+                return ToActionResult(resetTokenResult);
+            }
+
+            var (identityUser, token) = resetTokenResult.Value;
+            if (identityUser.Email is null)
+            {
+                Logger.LogError("User {UserId} email is null, cannot send password reset link.", identityUser.Id);
+                return StatusCode(500, "Something went wrong!");
+            }
+            
+            await EmailSender.SendPasswordResetCodeAsync(identityUser, identityUser.Email, token);
+
+            return Ok("If an account exists for this email, a password reset link has been sent.");
+        }
+
+        [HttpPost("resetPassword")]
+        public async Task<IActionResult> ResetPassword([FromBody] RequestResetPassword requestResetPassword)
+        {
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var resetResult = await AccountService.ResetPassword(requestResetPassword, ip);
+            if (resetResult.IsFailed)
+            {
+                return ToActionResult(resetResult);
+            }
+
+            return Ok("Password reset successfully!");
+        }
+
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] RefreshRequest req)
         {
@@ -101,7 +141,7 @@ namespace Tutor.Api.Controllers
             return methodName switch
             {
                 "InternalServerError" => StatusCode(500, result.Errors),
-                "BadReqeust" => BadRequest(result.Errors),
+                "BadRequest" => BadRequest(result.Errors),
                 "Unauthorized" => Unauthorized(result.Errors),
                 _ => BadRequest(result.Errors),
             };
@@ -116,6 +156,7 @@ namespace Tutor.Api.Controllers
 
             return methodName switch
             {
+                "InternalServerError" => StatusCode(500, result.Errors),
                 "BadReqeust" => BadRequest(result.Errors),
                 "Unauthorized" => Unauthorized(result.Errors),
                 _ => BadRequest(result.Errors),

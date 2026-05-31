@@ -11,6 +11,28 @@ Accept: application/json
 }
 ###
 
+### Request password reset link
+POST {{TutorApi_HostAddress}}/account/forgotPassword
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "user@example.com"
+}
+###
+
+### Reset password
+POST {{TutorApi_HostAddress}}/account/resetPassword
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "user@example.com",
+  "token": "paste-token-from-reset-link",
+  "newPassword": "NewP@ssword1"
+}
+###
+
 ### Login
 POST {{TutorApi_HostAddress}}/account/login
 Content-Type: application/json

@@ -1,5 +1,6 @@
 ﻿using FluentResults;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using System.Net.Mail;
@@ -142,7 +143,7 @@ namespace Tutor.Api.Services
             {
                 _logger.LogError("Try to confirm invalid userId: {userId}", userId);
                 IError authorizationError = new Error("Invalid email or password")
-                    .WithMetadata("MethodName", "BadReqeust");
+                    .WithMetadata("MethodName", "BadRequest");
                 return Result.Fail(authorizationError);
             }
             var identityResult = await _userManager.ConfirmEmailAsync(identityUser, token);
@@ -150,9 +151,84 @@ namespace Tutor.Api.Services
             {
                 _logger.LogError("Tried to confirm userId: {userId} with invalide code: {invalidCode}", userId, token);
                 IError authorizationError = new Error("Something went wrong!")
-                    .WithMetadata("MethodName", "BadReqeust");
+                    .WithMetadata("MethodName", "BadRequest");
                 return Result.Fail(authorizationError);
             }
+
+            return Result.Ok();
+        }
+
+        public async Task<Result<(User User, string Token)>> GeneratePasswordResetToken(RequestForgotPassword requestForgotPassword)
+        {
+            if (!MailAddress.TryCreate(requestForgotPassword.Email, out _))
+            {
+                IError authorizationError = new Error("The entered email address is not valid!")
+                    .WithMetadata("MethodName", "BadRequest");
+                return Result.Fail(authorizationError);
+            }
+
+            var identityUser = await _userManager.FindByEmailAsync(requestForgotPassword.Email);
+            if (identityUser?.Email is null)
+            {
+                _logger.LogInformation("Password reset requested for non-existing email {Email}.", requestForgotPassword.Email);
+                return Result.Fail(new Error("Password reset target not found.")
+                    .WithMetadata("MethodName", "NotFound"));
+            }
+
+            var token = await _userManager.GeneratePasswordResetTokenAsync(identityUser);
+            if (string.IsNullOrEmpty(token))
+            {
+                _logger.LogError("Method GeneratePasswordResetTokenAsync failed to generate the reset token for user {UserId}.", identityUser.Id);
+                IError authorizationError = new Error("Something went wrong!")
+                    .WithMetadata("MethodName", "InternalServerError");
+                return Result.Fail(authorizationError);
+            }
+
+            var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+
+            return Result.Ok((identityUser, encodedToken));
+        }
+
+        public async Task<Result> ResetPassword(RequestResetPassword requestResetPassword, string ip)
+        {
+            if (!MailAddress.TryCreate(requestResetPassword.Email, out _))
+            {
+                IError authorizationError = new Error("The entered email address is not valid!")
+                    .WithMetadata("MethodName", "BadRequest");
+                return Result.Fail(authorizationError);
+            }
+
+            var identityUser = await _userManager.FindByEmailAsync(requestResetPassword.Email);
+            if (identityUser is null)
+            {
+                IError authorizationError = new Error("Invalid password!")
+                    .WithMetadata("MethodName", "BadRequest");
+                return Result.Fail(authorizationError);
+            }
+
+            string token;
+            try
+            {
+                token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(requestResetPassword.Token));
+            }
+            catch (FormatException)
+            {
+                _logger.LogError("Failed to generate UTF8 reset password token for userId: {UserId}, from token: {token}", identityUser.Id, requestResetPassword.Token);
+                IError authorizationError = new Error("Invalid password reset request!")
+                    .WithMetadata("MethodName", "BadRequest");
+                return Result.Fail(authorizationError);
+            }
+
+            var identityResult = await _userManager.ResetPasswordAsync(identityUser, token, requestResetPassword.NewPassword);
+            if (!identityResult.Succeeded)
+            {
+                _logger.LogError("Failed to reset password for user {UserId}. Errors: {@errors}", identityUser.Id, identityResult.Errors);
+                IError authorizationError = new Error("Invalid password reset request!")
+                    .WithMetadata("MethodName", "BadRequest");
+                return Result.Fail(authorizationError);
+            }
+
+            await _refreshTokenService.RevokeAllUserRefreshTokensByUserId(identityUser.Id, ip);
 
             return Result.Ok();
         }
@@ -162,7 +238,7 @@ namespace Tutor.Api.Services
             if (!MailAddress.TryCreate(requestCreateUser.Email, out _))
             {
                 IError authorizationError = new Error("The entered email address is not valid!")
-                    .WithMetadata("MethodName", "BadReqeust");
+                    .WithMetadata("MethodName", "BadRequest");
                 return Result.Fail(authorizationError);
             }
 
@@ -179,7 +255,7 @@ namespace Tutor.Api.Services
             {
                 _logger.LogError("Failed to create user with email {Email}. Errors: {@errors}", requestCreateUser.Email, identityResult.Errors);
                 IError authorizationError = new Error("Failed to create the user!")
-                    .WithMetadata("MethodName", "BadReqeust");
+                    .WithMetadata("MethodName", "BadRequest");
                 return Result.Fail(authorizationError);
             }
 
