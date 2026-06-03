@@ -1,82 +1,105 @@
 ﻿using Microsoft.AspNetCore.Identity;
+using System.Net.Http.Headers;
 using System.Net;
-using System.Net.Mail;
+using System.Text;
+using System.Text.Json;
 using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
 
 namespace Tutor.Api.Services
 {
-    public class EmailSender : IEmailSender<User>
+    public class EmailSender(HttpClient httpClient, AppSettings appSettings, ILogger<EmailSender> logger) : IEmailSender<User>
     {
-        private readonly SmtpClient _smtpClient;
-        private readonly Smtp _smtp;
-
-        public EmailSender(AppSettings appSettings)
-        {
-            _smtp = appSettings.Smtp;
-            _smtpClient = new SmtpClient(_smtp.Host, _smtp.Port);
-        }
+        private readonly MailJet _mailJetConfig = appSettings.MailJet;
 
         public async Task SendConfirmationLinkAsync(User user, string email, string confirmationLink)
         {
             var encodedConfirmationLink = WebUtility.HtmlEncode(confirmationLink);
-            var mailMessage = new MailMessage
-            {
-                From = new MailAddress(_smtp.FromEmail),
-                Subject = "Confirm your Tutor account",
-                Body = BuildEmailBody(
+            await SendEmailAsync(
+                email,
+                "Confirm your Tutor account",
+                BuildEmailBody(
                     "Confirm your email address",
                     "Thank you for creating a Tutor account. Please confirm your email address to complete your registration and start using your account.",
                     "Confirm email address",
                     encodedConfirmationLink,
-                    "If you did not create a Tutor account, you can safely ignore this email."),
-                IsBodyHtml = true
-            };
-
-            mailMessage.To.Add(email);
-
-            await _smtpClient.SendMailAsync(mailMessage);
+                    "If you did not create a Tutor account, you can safely ignore this email."));
         }
 
         public async Task SendPasswordResetCodeAsync(User user, string email, string resetCode)
         {
             var encodedResetCode = WebUtility.HtmlEncode(resetCode);
-            var mailMessage = new MailMessage
-            {
-                From = new MailAddress(_smtp.FromEmail),
-                Subject = "Your Tutor password reset code",
-                Body = BuildEmailBody(
+            await SendEmailAsync(
+                email,
+                "Your Tutor password reset code",
+                BuildEmailBody(
                     "Password reset code",
                     "We received a request to reset the password for your Tutor account. Use the verification code below to continue.",
                     encodedResetCode,
-                    "This code should be kept private. If you did not request a password reset, you can safely ignore this email."),
-                IsBodyHtml = true
-            };
-
-            mailMessage.To.Add(email);
-
-            await _smtpClient.SendMailAsync(mailMessage);
+                    "This code should be kept private. If you did not request a password reset, you can safely ignore this email."));
         }
 
         public async Task SendPasswordResetLinkAsync(User user, string email, string resetLink)
         {
             var encodedResetLink = WebUtility.HtmlEncode(resetLink);
-            var mailMessage = new MailMessage
-            {
-                From = new MailAddress(_smtp.FromEmail),
-                Subject = "Reset your Tutor password",
-                Body = BuildEmailBody(
+            await SendEmailAsync(
+                email,
+                "Reset your Tutor password",
+                BuildEmailBody(
                     "Reset your password",
                     "We received a request to reset the password for your Tutor account. Use the secure link below to choose a new password.",
                     "Reset password",
                     encodedResetLink,
-                    "If you did not request a password reset, you can safely ignore this email."),
-                IsBodyHtml = true
-            };
+                    "If you did not request a password reset, you can safely ignore this email."));
+        }
 
-            mailMessage.To.Add(email);
+        private async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, _mailJetConfig.MailJetSendEndpoint);
+            request.Headers.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_mailJetConfig.MailCredentials.ApiKey}:{_mailJetConfig.MailCredentials.ApiSecret}")));
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(new
+                {
+                    Messages = new[]
+                    {
+                        new
+                        {
+                            From = new
+                            {
+                                Email = _mailJetConfig.MailConfiguration.FromEmail,
+                                Name = _mailJetConfig.MailConfiguration.FromName
+                            },
+                            To = new[]
+                            {
+                                new
+                                {
+                                    Email = toEmail
+                                }
+                            },
+                            Subject = subject,
+                            HTMLPart = htmlBody
+                        }
+                    }
+                }),
+                Encoding.UTF8,
+                "application/json");
 
-            await _smtpClient.SendMailAsync(mailMessage);
+            using var response = await httpClient.SendAsync(request);
+            if (response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            var responseBody = await response.Content.ReadAsStringAsync();
+            logger.LogError(
+                "MailJet failed to send email to {Email}. StatusCode: {StatusCode}. Response: {ResponseBody}",
+                toEmail,
+                response.StatusCode,
+                responseBody);
+
+            throw new InvalidOperationException("MailJet failed to send the email.");
         }
 
         private static string BuildEmailBody(string title, string message, string actionText, string actionUrl, string footer)

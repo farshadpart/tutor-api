@@ -9,7 +9,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using StackExchange.Redis;
-using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using Tutor.Api.Data;
@@ -43,7 +42,7 @@ namespace Tutor.Api
                 {
                     return RateLimitPartition.GetFixedWindowLimiter(
                         partitionKey: httpContext.User.GetUserIdentifier(),
-                        factory: partition => new FixedWindowRateLimiterOptions
+                        factory: _ => new FixedWindowRateLimiterOptions
                         {
                             AutoReplenishment = true,
                             PermitLimit = 20,
@@ -90,8 +89,13 @@ namespace Tutor.Api
             builder.Services.AddScoped<SubscriptionService>();
             builder.Services.AddSingleton<SubscriptionAssertionService>();
             builder.Services.Configure<AppSettings>(builder.Configuration);
-            builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<AppSettings>>().Value);
-            builder.Services.AddScoped<IEmailSender<User>, EmailSender>();
+            builder.Services.AddSingleton(sp =>
+            {
+                var appSettings = sp.GetRequiredService<IOptions<AppSettings>>().Value;
+                appSettings.MailJet.MailCredentials = appSettings.GetMailJetCredentials();
+                return appSettings;
+            });
+            builder.Services.AddHttpClient<IEmailSender<User>, EmailSender>();
             builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")
                         ?? throw new InvalidOperationException("Connection string: 'Redis' not found.")));
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IConnectionMultiplexer>().GetDatabase());
