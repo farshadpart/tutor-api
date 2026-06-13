@@ -11,7 +11,7 @@ namespace Tutor.Api.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class AccountController(AccountService AccountService, RefreshTokenService RefreshTokenService, ILogger<AccountController> Logger, IEmailSender<User> EmailSender) : ControllerBase
+    public class AccountController(AccountService AccountService, RefreshTokenService RefreshTokenService, ILogger<AccountController> Logger, IEmailSender<User> EmailSender) : Controller
     {
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] RequestLogin requestLogin)
@@ -64,16 +64,38 @@ namespace Tutor.Api.Controllers
         }
 
         [HttpGet("confirmEmail")]
-        public async Task<IActionResult> ConfirmEmail(string userId, string token)
+        [Produces("text/html")]
+        public async Task<IActionResult> ConfirmEmail([FromQuery] string? userId, [FromQuery] string? token)
         {
             Logger.LogInformation("Email confirmation requested for user {UserId}.", userId);
+            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(token))
+            {
+                Logger.LogWarning("Email confirmation rejected because userId or token was missing.");
+                return EmailConfirmationView(
+                    "Email link is incomplete",
+                    "We could not confirm this account because the confirmation link is missing required information.",
+                    "Please use the latest confirmation email from Tutor. If the problem continues, request a new confirmation email.",
+                    false,
+                    StatusCodes.Status400BadRequest);
+            }
+
             var confirmResult = await AccountService.ConfirmEmail(userId, token);
             if (confirmResult.IsFailed)
             {
-                return ToActionResult(confirmResult);
+                return EmailConfirmationView(
+                    "Email link expired or invalid",
+                    "We could not confirm this account with the link provided.",
+                    "For your security, confirmation links can only be used once and may expire. Please sign in or register again to receive a fresh confirmation email.",
+                    false,
+                    StatusCodes.Status400BadRequest);
             }
             
-            return Ok("Email confirmed successfully!");
+            return EmailConfirmationView(
+                "Email confirmed",
+                "Your Tutor account is ready to use.",
+                "You can now return to Tutor and sign in with your email and password.",
+                true,
+                StatusCodes.Status200OK);
         }
 
         [HttpPost("forgotPassword")]
@@ -181,6 +203,12 @@ namespace Tutor.Api.Controllers
                 "Unauthorized" => Unauthorized(result.Errors),
                 _ => BadRequest(result.Errors),
             };
+        }
+
+        private IActionResult EmailConfirmationView(string title, string message, string guidance, bool isSuccess, int statusCode)
+        {
+            Response.StatusCode = statusCode;
+            return View("ConfirmEmail", new EmailConfirmationViewModel(title, message, guidance, isSuccess));
         }
     }
 }
