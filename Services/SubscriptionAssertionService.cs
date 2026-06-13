@@ -29,8 +29,12 @@
 
         public async Task AssertUserSubscriptionAsync(string userId)
         {
+            _logger.LogDebug("Subscription assertion requested for user {UserId}.", userId);
+
             using (_lockProvider.AcquireLock($"UserAccount:{userId}"))
             {
+                _logger.LogDebug("Subscription assertion lock acquired for user {UserId}.", userId);
+
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var tutorContext = scope.ServiceProvider.GetRequiredService<TutorContext>();
                 var user = await GetUserAsync(userId, tutorContext);
@@ -45,13 +49,17 @@
 
                 if (await ValidateAndUpdateActiveCycle(user, activeCycle, tutorContext))
                 {
+                    _logger.LogDebug("Subscription assertion passed using active cycle for user {UserId}.", userId);
                     return;
                 }
 
                 if (!await ValidateAndUpdateQueuedCycle(user, queuedCycle, tutorContext))
                 {
+                    _logger.LogError("Subscription assertion failed for user {UserId}: no valid active or queued cycle.", userId);
                     throw new Exception(Errors.FAILED_VALIDATE_QUEUED_CYCLE);
                 }
+
+                _logger.LogDebug("Subscription assertion passed using queued cycle for user {UserId}.", userId);
             }
         }
 
@@ -63,11 +71,24 @@
                 return false;
             }
 
+            _logger.LogDebug(
+                "Validating active cycle {CycleId} for user {UserId}; usage is {CurrentRequestCount}/{ValidRequestCount}.",
+                activeCycle.Id,
+                user.Id,
+                activeCycle.CurrentRequestConut,
+                activeCycle.ValidRequestCount);
+
             bool isValid = false;
             if (ValidateCycle(activeCycle))
             {
                 activeCycle.CurrentRequestConut++;
                 isValid = true;
+                _logger.LogInformation(
+                    "Active cycle {CycleId} accepted for user {UserId}; usage is now {CurrentRequestCount}/{ValidRequestCount}.",
+                    activeCycle.Id,
+                    user.Id,
+                    activeCycle.CurrentRequestConut,
+                    activeCycle.ValidRequestCount);
             }
 
             await UpdateDb(user, activeCycle, tutorContext);
@@ -82,6 +103,11 @@
                 return false;
             }
 
+            _logger.LogInformation(
+                "Activating queued cycle {CycleId} for user {UserId}.",
+                queuedCycle.Id,
+                user.Id);
+
             queuedCycle.StartedAt = DateTime.UtcNow;
             queuedCycle.Status = CycleStatus.Active;
 
@@ -90,6 +116,12 @@
             {
                 queuedCycle.CurrentRequestConut++;
                 isValid = true;
+                _logger.LogInformation(
+                    "Queued cycle {CycleId} accepted for user {UserId}; usage is now {CurrentRequestCount}/{ValidRequestCount}.",
+                    queuedCycle.Id,
+                    user.Id,
+                    queuedCycle.CurrentRequestConut,
+                    queuedCycle.ValidRequestCount);
             }
 
             await UpdateDb(user, queuedCycle, tutorContext);
@@ -102,7 +134,11 @@
             {
                 cycle.ExpiredAt = DateTime.UtcNow;
                 cycle.Status = CycleStatus.Expired;
-                _logger.LogInformation("All possible requests in the cycle with id: {cycleId} have been used!", cycle.Id);
+                _logger.LogInformation(
+                    "Cycle {CycleId} expired because all requests were used: {CurrentRequestCount}/{ValidRequestCount}.",
+                    cycle.Id,
+                    cycle.CurrentRequestConut,
+                    cycle.ValidRequestCount);
                 return false;
             }
 
@@ -116,9 +152,15 @@
             {
                 cycle.ExpiredAt = DateTime.UtcNow;
                 cycle.Status = CycleStatus.Expired;
+                _logger.LogInformation(
+                    "Cycle {CycleId} expired because its duration ended. StartedAt: {StartedAt}; Duration: {Duration}.",
+                    cycle.Id,
+                    cycle.StartedAt,
+                    cycle.Duration);
                 return false;
             }
 
+            _logger.LogDebug("Cycle {CycleId} is valid.", cycle.Id);
             return true;
         }
 
@@ -128,8 +170,11 @@
 
             if (redisUserValue.HasValue)
             {
+                _logger.LogDebug("Subscription user {UserId} loaded from cache.", userId);
                 return redisUserValue.ToString().Deserialize<User, SubscriptionAssertionService>(_logger) ?? throw new Exception(Errors.SOMETHING_WENT_WRONG);
             }
+
+            _logger.LogDebug("Subscription user {UserId} cache miss; loading from database.", userId);
 
             var user = await tutorContext.Users
                                 .AsNoTracking()
@@ -144,6 +189,11 @@
                 throw new TutorException(Errors.USER_NOT_FOUND);
             }
 
+            _logger.LogDebug(
+                "Subscription user {UserId} loaded from database with {SubscriptionCount} subscriptions.",
+                userId,
+                user.Subscriptions.Count);
+
             return user.DeepCopy() ?? throw new Exception(Errors.DEEP_CLONE_FAILED);
         }
 
@@ -156,6 +206,10 @@
                 await tutorContext.SaveChangesAsync();
                 var userSerialized = JsonSerializer.Serialize(user);
                 await _cacheDb.StringSetAsync(GetKey(user.Id), userSerialized);
+                _logger.LogDebug(
+                    "Persisted cycle {CycleId} for user {UserId} and refreshed subscription cache.",
+                    cycle.Id,
+                    user.Id);
             }
             catch (Exception ex)
             {

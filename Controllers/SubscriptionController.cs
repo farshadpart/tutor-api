@@ -8,12 +8,23 @@ namespace Tutor.Api.Controllers
     [Authorize]
     [ApiController]
     [Route("[controller]")]
-    public class SubscriptionController(SubscriptionService SubscriptionService) : ControllerBase
+    public class SubscriptionController(SubscriptionService SubscriptionService, ILogger<SubscriptionController> Logger) : ControllerBase
     {
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] CreateSubscriptionRequest createRequest)
         {
+            Logger.LogInformation(
+                "Subscription create requested for user {UserId} with group {SubscriptionGroup}.",
+                createRequest.UserId,
+                createRequest.SubscriptionGroup);
+
             await SubscriptionService.Create(createRequest);
+
+            Logger.LogInformation(
+                "Subscription create completed for user {UserId} with group {SubscriptionGroup}.",
+                createRequest.UserId,
+                createRequest.SubscriptionGroup);
+
             return NoContent();
         }
 
@@ -21,7 +32,10 @@ namespace Tutor.Api.Controllers
         [HttpGet("getSubscriptionGroups")]
         public IActionResult GetSubscriptionGroups()
         {
-            return Ok(SubscriptionService.GetSubscriptionGroups());
+            Logger.LogDebug("Subscription groups requested.");
+            var subscriptionGroups = SubscriptionService.GetSubscriptionGroups();
+            Logger.LogInformation("Returned {SubscriptionGroupCount} subscription groups.", subscriptionGroups.Count);
+            return Ok(subscriptionGroups);
         }
     }
 }
