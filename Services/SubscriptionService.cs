@@ -4,6 +4,7 @@ using Tutor.Api.Data;
 using Tutor.Api.Models.Exceptions;
 using Tutor.Api.Models.Subscriptions;
 using Tutor.Api.Models.Tutor.Api.Contracts.Subscription;
+using SerilogTimings;
 
 namespace Tutor.Api.Services
 {
@@ -130,9 +131,19 @@ namespace Tutor.Api.Services
 
         public async Task Assert(string userId)
         {
-            logger.LogDebug("Asserting subscription for user {UserId}.", userId);
-            await subscriptionAssertionService.AssertUserSubscriptionAsync(userId);
-            logger.LogDebug("Subscription assertion completed for user {UserId}.", userId);
+            using var operation = Operation.Begin("Assert subscription for user {UserId}", userId);
+
+            try
+            {
+                await subscriptionAssertionService.AssertUserSubscriptionAsync(userId);
+                operation.Complete();
+            }
+            catch (Exception ex)
+            {
+                operation.SetException(ex);
+                operation.Abandon();
+                throw;
+            }
         }
     }
 }
