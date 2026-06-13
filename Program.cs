@@ -15,6 +15,7 @@ using Tutor.Api.Data;
 using Tutor.Api.Middlewares;
 using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
+using Tutor.Api.Models.Constants;
 using Tutor.Api.Services;
 using Tutor.Api.Utilities;
 
@@ -69,6 +70,74 @@ namespace Tutor.Api
                 options.TokenValidationParameters.ValidIssuer = builder.Configuration["Jwt:Issuer"];
                 options.TokenValidationParameters.ValidAudience = builder.Configuration["Jwt:Audience"];
                 options.TokenValidationParameters.IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SecretKey"]!));
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                        if (!string.IsNullOrWhiteSpace(context.Request.Headers.Authorization))
+                        {
+                            logger.LogDebug(
+                                "Bearer authentication header received for {Method} {Path} from IP {Ip}.",
+                                context.Request.Method,
+                                context.Request.Path,
+                                context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                    OnTokenValidated = context =>
+                    {
+                        var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                        var userId = context.Principal?.FindFirst(TutorClaimTypes.Id)?.Value ?? "unknown";
+                        logger.LogInformation(
+                            "Bearer token validated for user {UserId} on {Method} {Path} from IP {Ip}.",
+                            userId,
+                            context.Request.Method,
+                            context.Request.Path,
+                            context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+
+                        return Task.CompletedTask;
+                    },
+                    OnAuthenticationFailed = context =>
+                    {
+                        var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                        logger.LogWarning(
+                            context.Exception,
+                            "Bearer authentication failed on {Method} {Path} from IP {Ip}.",
+                            context.Request.Method,
+                            context.Request.Path,
+                            context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+
+                        return Task.CompletedTask;
+                    },
+                    OnChallenge = context =>
+                    {
+                        var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                        logger.LogWarning(
+                            "Bearer authentication challenge on {Method} {Path} from IP {Ip}. Error: {Error}; Description: {ErrorDescription}.",
+                            context.Request.Method,
+                            context.Request.Path,
+                            context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                            context.Error,
+                            context.ErrorDescription);
+
+                        return Task.CompletedTask;
+                    },
+                    OnForbidden = context =>
+                    {
+                        var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                        var userId = context.Principal?.FindFirst(TutorClaimTypes.Id)?.Value ?? "unknown";
+                        logger.LogWarning(
+                            "Bearer authorization forbidden for user {UserId} on {Method} {Path} from IP {Ip}.",
+                            userId,
+                            context.Request.Method,
+                            context.Request.Path,
+                            context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+
+                        return Task.CompletedTask;
+                    }
+                };
             });
 
             builder.Services.AddAuthorization();
