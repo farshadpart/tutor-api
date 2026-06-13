@@ -70,11 +70,9 @@ namespace Tutor.Api.Controllers
             var confirmResult = await AccountService.ConfirmEmail(userId, token);
             if (confirmResult.IsFailed)
             {
-                Logger.LogWarning("Email confirmation failed for user {UserId}.", userId);
                 return ToActionResult(confirmResult);
             }
-
-            Logger.LogInformation("Email confirmed for user {UserId}.", userId);
+            
             return Ok("Email confirmed successfully!");
         }
 
