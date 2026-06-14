@@ -7,24 +7,26 @@ namespace Tutor.Api.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class LogController(ILogger<AccountController> Logger) : ControllerBase
+    public class LogController(ILogger<LogController> logger) : ControllerBase
     {
         [HttpPost("log")]
-        public async Task Log([FromBody] LogRequest logRequest)
+        public Task Log([FromBody] LogRequest logRequest)
         {
-            if (!Logger.IsEnabled(logRequest.LogLevel) && logRequest is { Arguments.Length: > 15 })
+            if (!logger.IsEnabled(logRequest.LogLevel) && logRequest is { Arguments.Length: > 15 })
             {
-                return;
+                return Task.CompletedTask;
             }
 
             using (LogContext.PushProperty("LogStream", "Mobile"))
             {
-                Exception? exception = logRequest.Exception is not null ? new Exception(logRequest.Exception) : null;
+                var exception = logRequest.Exception is not null ? new Exception(logRequest.Exception) : null;
 
 #pragma warning disable CA2254
-                Logger.Log(logLevel: logRequest.LogLevel, exception: exception, message: logRequest.Message, args: NormalizeArguments(logRequest.Arguments));
+                logger.Log(logLevel: logRequest.LogLevel, exception: exception, message: logRequest.Message, args: NormalizeArguments(logRequest.Arguments));
 #pragma warning restore CA2254
             }
+            
+            return Task.CompletedTask;
         }
 
         private static object?[] NormalizeArguments(object?[]? args)
