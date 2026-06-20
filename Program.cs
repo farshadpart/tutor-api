@@ -1,5 +1,4 @@
 
-using System.Globalization;
 using Medallion.Threading;
 using Medallion.Threading.Redis;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -9,6 +8,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using StackExchange.Redis;
+using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.RateLimiting;
 using Tutor.Api.Data;
@@ -172,6 +173,11 @@ namespace Tutor.Api
             builder.Services.AddSerilog();
 
             var app = builder.Build();
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                app.UsePathBase($"/{builder.Configuration["BasePath"] ?? throw new Exception("BasePath is not configured.")}");
+            }
 
             using (var scope = app.Services.CreateScope())
             {
