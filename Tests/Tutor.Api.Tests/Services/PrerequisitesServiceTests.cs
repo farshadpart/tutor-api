@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
-using Tutor.Api.Tests.Utility;
+using Microsoft.Extensions.Options;
+using NSubstitute;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Subscriptions;
 using Tutor.Api.Services;
@@ -15,35 +16,58 @@ public class PrerequisitesServiceTests
     [Fact]
     public async Task InsertInitialData_WhenGoogleUserAlreadyExists_DoesNotCreateOrUpdateUser()
     {
+        // Arrange
         var existingUser = new User { Id = GoogleUserId, UserName = "googleStoreUser" };
-        var userManager = new TestUserManager(existingUser);
-        var logger = new TestLogger<PrerequisitesService>();
-        var service = new PrerequisitesService(userManager, logger);
+        var userManager = CreateUserManager();
+        var logger = Substitute.For<ILogger<PrerequisitesService>>();
+        var sut = new PrerequisitesService(userManager, logger);
 
-        await service.InsertInitialData();
+        userManager.FindByIdAsync(GoogleUserId).Returns(existingUser);
 
-        Assert.Equal(1, userManager.FindByIdCallCount);
-        Assert.Equal(0, userManager.CreateCallCount);
-        Assert.Equal(0, userManager.UpdateCallCount);
-        Assert.Empty(logger.Entries);
+        // Act
+        await sut.InsertInitialData();
+
+        // Assert
+        await userManager.Received(1).FindByIdAsync(GoogleUserId);
+        await userManager.DidNotReceive().CreateAsync(Arg.Any<User>(), Arg.Any<string>());
+        await userManager.DidNotReceive().UpdateAsync(Arg.Any<User>());
+        AssertNoLogs(logger);
     }
 
     [Fact]
     public async Task InsertInitialData_WhenGoogleUserIsMissing_CreatesPlayTestUserAndConfirmsEmail()
     {
-        var userManager = new TestUserManager();
-        var logger = new TestLogger<PrerequisitesService>();
-        var service = new PrerequisitesService(userManager, logger);
+        // Arrange
+        var userManager = CreateUserManager();
+        var logger = Substitute.For<ILogger<PrerequisitesService>>();
+        var sut = new PrerequisitesService(userManager, logger);
+        User? createdUser = null;
+        string? createdPassword = null;
+        User? updatedUser = null;
+        var findByIdCallCount = 0;
 
-        await service.InsertInitialData();
+        userManager
+            .FindByIdAsync(GoogleUserId)
+            .Returns(_ => Task.FromResult(++findByIdCallCount == 1 ? null : createdUser));
+        userManager
+            .CreateAsync(Arg.Do<User>(user => createdUser = user), Arg.Do<string>(password => createdPassword = password))
+            .Returns(Task.FromResult(IdentityResult.Success));
+        userManager
+            .UpdateAsync(Arg.Do<User>(user => updatedUser = user))
+            .Returns(Task.FromResult(IdentityResult.Success));
 
-        Assert.Equal(2, userManager.FindByIdCallCount);
-        Assert.Equal(1, userManager.CreateCallCount);
-        Assert.Equal(1, userManager.UpdateCallCount);
-        Assert.Equal(GoogleUserPassword, userManager.CreatedPassword);
-        Assert.Empty(logger.Entries);
+        // Act
+        await sut.InsertInitialData();
 
-        var createdUser = Assert.IsType<User>(userManager.CreatedUser);
+        // Assert
+        await userManager.Received(2).FindByIdAsync(GoogleUserId);
+        await userManager.Received(1).CreateAsync(Arg.Any<User>(), GoogleUserPassword);
+        await userManager.Received(1).UpdateAsync(Arg.Any<User>());
+        Assert.Equal(GoogleUserPassword, createdPassword);
+        Assert.Same(createdUser, updatedUser);
+        AssertNoLogs(logger);
+
+        createdUser = Assert.IsType<User>(createdUser);
         Assert.Equal(GoogleUserId, createdUser.Id);
         Assert.Equal("googleStoreUser", createdUser.UserName);
         Assert.True(createdUser.EmailConfirmed);
@@ -63,61 +87,106 @@ public class PrerequisitesServiceTests
     [Fact]
     public async Task InsertInitialData_WhenCreateFails_LogsErrorAndDoesNotConfirmEmail()
     {
-        var userManager = new TestUserManager
-        {
-            CreateResult = IdentityResult.Failed(new IdentityError { Code = "CreateFailed" })
-        };
-        var logger = new TestLogger<PrerequisitesService>();
-        var service = new PrerequisitesService(userManager, logger);
+        // Arrange
+        var userManager = CreateUserManager();
+        var logger = Substitute.For<ILogger<PrerequisitesService>>();
+        var sut = new PrerequisitesService(userManager, logger);
+        var createResult = IdentityResult.Failed(new IdentityError { Code = "CreateFailed" });
 
-        await service.InsertInitialData();
+        userManager.FindByIdAsync(GoogleUserId).Returns(Task.FromResult<User?>(null));
+        userManager.CreateAsync(Arg.Any<User>(), GoogleUserPassword).Returns(Task.FromResult(createResult));
 
-        Assert.Equal(1, userManager.FindByIdCallCount);
-        Assert.Equal(1, userManager.CreateCallCount);
-        Assert.Equal(0, userManager.UpdateCallCount);
+        // Act
+        await sut.InsertInitialData();
 
-        var entry = Assert.Single(logger.Entries);
-        Assert.Equal(LogLevel.Error, entry.Level);
-        Assert.Contains("Failed to create the googleStoreUser.", entry.Message);
+        // Assert
+        await userManager.Received(1).FindByIdAsync(GoogleUserId);
+        await userManager.Received(1).CreateAsync(Arg.Any<User>(), GoogleUserPassword);
+        await userManager.DidNotReceive().UpdateAsync(Arg.Any<User>());
+        AssertSingleLog(logger, LogLevel.Error, "Failed to create the googleStoreUser.");
     }
 
     [Fact]
     public async Task InsertInitialData_WhenCreatedUserCannotBeFound_LogsErrorAndDoesNotUpdate()
     {
-        var userManager = new TestUserManager { ReturnCreatedUserFromFind = false };
-        var logger = new TestLogger<PrerequisitesService>();
-        var service = new PrerequisitesService(userManager, logger);
+        // Arrange
+        var userManager = CreateUserManager();
+        var logger = Substitute.For<ILogger<PrerequisitesService>>();
+        var sut = new PrerequisitesService(userManager, logger);
 
-        await service.InsertInitialData();
+        userManager.FindByIdAsync(GoogleUserId).Returns(Task.FromResult<User?>(null));
+        userManager.CreateAsync(Arg.Any<User>(), GoogleUserPassword).Returns(Task.FromResult(IdentityResult.Success));
 
-        Assert.Equal(2, userManager.FindByIdCallCount);
-        Assert.Equal(1, userManager.CreateCallCount);
-        Assert.Equal(0, userManager.UpdateCallCount);
+        // Act
+        await sut.InsertInitialData();
 
-        var entry = Assert.Single(logger.Entries);
-        Assert.Equal(LogLevel.Error, entry.Level);
-        Assert.Contains("Failed to find the googleStoreUser.", entry.Message);
+        // Assert
+        await userManager.Received(2).FindByIdAsync(GoogleUserId);
+        await userManager.Received(1).CreateAsync(Arg.Any<User>(), GoogleUserPassword);
+        await userManager.DidNotReceive().UpdateAsync(Arg.Any<User>());
+        AssertSingleLog(logger, LogLevel.Error, "Failed to find the googleStoreUser.");
     }
 
     [Fact]
     public async Task InsertInitialData_WhenEmailConfirmationUpdateFails_LogsError()
     {
-        var userManager = new TestUserManager
-        {
-            UpdateResult = IdentityResult.Failed(new IdentityError { Code = "UpdateFailed" })
-        };
-        var logger = new TestLogger<PrerequisitesService>();
-        var service = new PrerequisitesService(userManager, logger);
+        // Arrange
+        var userManager = CreateUserManager();
+        var logger = Substitute.For<ILogger<PrerequisitesService>>();
+        var sut = new PrerequisitesService(userManager, logger);
+        User? createdUser = null;
+        User? updatedUser = null;
+        var updateResult = IdentityResult.Failed(new IdentityError { Code = "UpdateFailed" });
+        var findByIdCallCount = 0;
 
-        await service.InsertInitialData();
+        userManager
+            .FindByIdAsync(GoogleUserId)
+            .Returns(_ => Task.FromResult(++findByIdCallCount == 1 ? null : createdUser));
+        userManager
+            .CreateAsync(Arg.Do<User>(user => createdUser = user), GoogleUserPassword)
+            .Returns(Task.FromResult(IdentityResult.Success));
+        userManager
+            .UpdateAsync(Arg.Do<User>(user => updatedUser = user))
+            .Returns(Task.FromResult(updateResult));
 
-        Assert.Equal(2, userManager.FindByIdCallCount);
-        Assert.Equal(1, userManager.CreateCallCount);
-        Assert.Equal(1, userManager.UpdateCallCount);
-        Assert.True(userManager.UpdatedUser?.EmailConfirmed);
+        // Act
+        await sut.InsertInitialData();
 
-        var entry = Assert.Single(logger.Entries);
-        Assert.Equal(LogLevel.Error, entry.Level);
-        Assert.Contains("Failed to enable EmailConfirmed in the googleStoreUser.", entry.Message);
+        // Assert
+        await userManager.Received(2).FindByIdAsync(GoogleUserId);
+        await userManager.Received(1).CreateAsync(Arg.Any<User>(), GoogleUserPassword);
+        await userManager.Received(1).UpdateAsync(Arg.Any<User>());
+        Assert.True(updatedUser?.EmailConfirmed);
+        AssertSingleLog(logger, LogLevel.Error, "Failed to enable EmailConfirmed in the googleStoreUser.");
+    }
+
+    private static UserManager<User> CreateUserManager()
+    {
+        return Substitute.For<UserManager<User>>(
+            Substitute.For<IUserStore<User>>(),
+            Options.Create(new IdentityOptions()),
+            Substitute.For<IPasswordHasher<User>>(),
+            Array.Empty<IUserValidator<User>>(),
+            Array.Empty<IPasswordValidator<User>>(),
+            Substitute.For<ILookupNormalizer>(),
+            new IdentityErrorDescriber(),
+            Substitute.For<IServiceProvider>(),
+            Substitute.For<ILogger<UserManager<User>>>());
+    }
+
+    private static void AssertNoLogs(ILogger<PrerequisitesService> logger)
+    {
+        Assert.DoesNotContain(logger.ReceivedCalls(), call => call.GetMethodInfo().Name == nameof(ILogger.Log));
+    }
+
+    private static void AssertSingleLog(ILogger<PrerequisitesService> logger, LogLevel level, string message)
+    {
+        var call = Assert.Single(
+            logger.ReceivedCalls(),
+            call => call.GetMethodInfo().Name == nameof(ILogger.Log));
+        var arguments = call.GetArguments();
+
+        Assert.Equal(level, arguments[0]);
+        Assert.Contains(message, arguments[2]?.ToString());
     }
 }
