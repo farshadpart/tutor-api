@@ -157,6 +157,7 @@ namespace Tutor.Api
             builder.Services.AddScoped<PrerequisitesService>();
             builder.Services.AddScoped<ChatGptAudioService>();
             builder.Services.AddScoped<IChatGptAudioClient, ChatGptAudioClient>();
+            builder.Services.AddScoped<IChatGptChatClient, ChatGptChatClient>();
             builder.Services.AddScoped<ChatGptChatService>();
             builder.Services.AddScoped<SubscriptionService>();
             builder.Services.AddSingleton<SubscriptionAssertionService>();

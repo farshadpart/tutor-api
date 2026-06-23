@@ -1,12 +1,14 @@
 ﻿using OpenAI.Chat;
 using SerilogTimings;
+using Tutor.Api.Services.Interfaces;
 
 namespace Tutor.Api.Services
 {
-    public class ChatGptChatService(SubscriptionService subscriptionService, ILogger<ChatGptChatService> logger)
+    public class ChatGptChatService(
+        SubscriptionService subscriptionService,
+        IChatGptChatClient chatGptChatClient,
+        ILogger<ChatGptChatService> logger)
     {
-        private readonly ChatClient _client = new("gpt-4.1", Environment.GetEnvironmentVariable("TutorKey"));
-
         public async Task<string> ChatAsync(ChatMessage[] chats, string userId)
         {
             logger.LogInformation(
@@ -24,7 +26,7 @@ namespace Tutor.Api.Services
                 MaxOutputTokenCount = 1024
             };
 
-            ChatCompletion completion;
+            string response;
             using (var operation = Operation.Begin("Complete chat with OpenAI for user {UserId}", userId))
             {
                 try
@@ -34,7 +36,7 @@ namespace Tutor.Api.Services
                         userId,
                         options.Temperature,
                         options.MaxOutputTokenCount);
-                    completion = await _client.CompleteChatAsync(chats, options);
+                    response = await chatGptChatClient.CompleteChatAsync(chats, options);
                     operation.Complete();
                 }
                 catch (Exception ex)
@@ -46,7 +48,6 @@ namespace Tutor.Api.Services
                 }
             }
 
-            var response = completion.Content[0].Text;
             logger.LogInformation(
                 "OpenAI chat completion succeeded for user {UserId}; response length {ResponseLength}.",
                 userId,
