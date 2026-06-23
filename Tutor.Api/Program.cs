@@ -18,6 +18,7 @@ using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Constants;
 using Tutor.Api.Services;
+using Tutor.Api.Services.Interfaces;
 using Tutor.Api.Utilities;
 
 namespace Tutor.Api
@@ -155,6 +156,7 @@ namespace Tutor.Api
             builder.Services.AddScoped<RefreshTokenService>();
             builder.Services.AddScoped<PrerequisitesService>();
             builder.Services.AddScoped<ChatGptAudioService>();
+            builder.Services.AddScoped<IChatGptAudioClient, ChatGptAudioClient>();
             builder.Services.AddScoped<ChatGptChatService>();
             builder.Services.AddScoped<SubscriptionService>();
             builder.Services.AddSingleton<SubscriptionAssertionService>();
