@@ -7,10 +7,7 @@
       "launchBrowser": false,
       "applicationUrl": "http://localhost:5252;",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "TutorKey": "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",
-        "MailJetApiKey": "b6243f5c37eebaeb708eb6224ec42df7",
-        "MailJetApiSecretKey": "e4fea77e52f11c4da6b19a84d4a11495"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
     "https": {
@@ -19,10 +16,7 @@
       "launchBrowser": false,
       "applicationUrl": "http://localhost:5252",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "MailJetApiKey": "b6243f5c37eebaeb708eb6224ec42df7",
-        "MailJetApiSecretKey": "e4fea77e52f11c4da6b19a84d4a11495",
-        "TutorKey": "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"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     }
   }
