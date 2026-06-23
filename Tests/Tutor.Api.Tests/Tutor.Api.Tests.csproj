@@ -18,4 +18,8 @@
         <Using Include="Xunit"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <ProjectReference Include="..\..\Tutor.Api\Tutor.Api.csproj"/>
+    </ItemGroup>
+
 </Project>
