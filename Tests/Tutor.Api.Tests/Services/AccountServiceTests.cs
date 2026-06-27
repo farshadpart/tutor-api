@@ -119,6 +119,127 @@ public class AccountServiceTests
     }
 
     [Fact]
+    public async Task GeneratePasswordResetToken_WhenEmailIsInvalid_ReturnsBadRequestAndDoesNotLookupUser()
+    {
+        // Arrange
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestForgotPassword("not-an-email");
+
+        // Act
+        var result = await sut.GeneratePasswordResetToken(request);
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("The entered email address is not valid!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
+        await userManager.DidNotReceive().FindByEmailAsync(Arg.Any<string>());
+        await userManager.DidNotReceive().GeneratePasswordResetTokenAsync(Arg.Any<User>());
+    }
+
+    [Fact]
+    public async Task GeneratePasswordResetToken_WhenUserDoesNotExist_ReturnsNotFoundAndDoesNotGenerateToken()
+    {
+        // Arrange
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestForgotPassword("student@example.com");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(null));
+
+        // Act
+        var result = await sut.GeneratePasswordResetToken(request);
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Password reset target not found.");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("NotFound");
+        await userManager.Received(1).FindByEmailAsync(request.Email);
+        await userManager.DidNotReceive().GeneratePasswordResetTokenAsync(Arg.Any<User>());
+    }
+
+    [Fact]
+    public async Task GeneratePasswordResetToken_WhenUserEmailIsNull_ReturnsNotFoundAndDoesNotGenerateToken()
+    {
+        // Arrange
+        var user = new User { Id = "user-1", Email = null };
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestForgotPassword("student@example.com");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(user));
+
+        // Act
+        var result = await sut.GeneratePasswordResetToken(request);
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Password reset target not found.");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("NotFound");
+        await userManager.Received(1).FindByEmailAsync(request.Email);
+        await userManager.DidNotReceive().GeneratePasswordResetTokenAsync(Arg.Any<User>());
+    }
+
+    [Fact]
+    public async Task GeneratePasswordResetToken_WhenGeneratedTokenIsEmpty_ReturnsInternalServerError()
+    {
+        // Arrange
+        var user = new User { Id = "user-1", Email = "student@example.com" };
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestForgotPassword(user.Email);
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(user));
+        userManager
+            .GeneratePasswordResetTokenAsync(user)
+            .Returns(Task.FromResult(string.Empty));
+
+        // Act
+        var result = await sut.GeneratePasswordResetToken(request);
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Something went wrong!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("InternalServerError");
+        await userManager.Received(1).GeneratePasswordResetTokenAsync(user);
+    }
+
+    [Fact]
+    public async Task GeneratePasswordResetToken_WhenHappyPath_ReturnsUserAndEncodedToken()
+    {
+        // Arrange
+        const string token = "reset-token/with+special=characters";
+        var user = new User { Id = "user-1", Email = "student@example.com" };
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestForgotPassword(user.Email);
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(user));
+        userManager
+            .GeneratePasswordResetTokenAsync(user)
+            .Returns(Task.FromResult(token));
+
+        // Act
+        var result = await sut.GeneratePasswordResetToken(request);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.User.ShouldBeSameAs(user);
+        result.Value.Token.ShouldBe(EncodeResetToken(token));
+        Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(result.Value.Token)).ShouldBe(token);
+        await userManager.Received(1).FindByEmailAsync(request.Email);
+        await userManager.Received(1).GeneratePasswordResetTokenAsync(user);
+    }
+
+    [Fact]
     public async Task ResetPassword_WhenEmailIsInvalid_ReturnsBadRequestAndDoesNotLookupUser()
     {
         // Arrange
