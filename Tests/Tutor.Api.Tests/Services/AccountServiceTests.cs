@@ -119,6 +119,82 @@ public class AccountServiceTests
     }
 
     [Fact]
+    public async Task ConfirmEmail_WhenUserDoesNotExist_ReturnsBadRequestAndDoesNotConfirmEmail()
+    {
+        // Arrange
+        const string userId = "user-1";
+        const string token = "confirmation-token";
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+
+        userManager
+            .FindByIdAsync(userId)
+            .Returns(Task.FromResult<User?>(null));
+
+        // Act
+        var result = await sut.ConfirmEmail(userId, token);
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Invalid email or password");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
+        await userManager.Received(1).FindByIdAsync(userId);
+        await userManager.DidNotReceive().ConfirmEmailAsync(Arg.Any<User>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task ConfirmEmail_WhenIdentityConfirmationFails_ReturnsBadRequest()
+    {
+        // Arrange
+        const string token = "confirmation-token";
+        var user = new User { Id = "user-1", Email = "student@example.com" };
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+
+        userManager
+            .FindByIdAsync(user.Id)
+            .Returns(Task.FromResult<User?>(user));
+        userManager
+            .ConfirmEmailAsync(user, token)
+            .Returns(Task.FromResult(IdentityResult.Failed(new IdentityError { Code = "InvalidToken" })));
+
+        // Act
+        var result = await sut.ConfirmEmail(user.Id, token);
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Something went wrong!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
+        await userManager.Received(1).FindByIdAsync(user.Id);
+        await userManager.Received(1).ConfirmEmailAsync(user, token);
+    }
+
+    [Fact]
+    public async Task ConfirmEmail_WhenIdentityConfirmationSucceeds_ReturnsSuccess()
+    {
+        // Arrange
+        const string token = "confirmation-token";
+        var user = new User { Id = "user-1", Email = "student@example.com" };
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+
+        userManager
+            .FindByIdAsync(user.Id)
+            .Returns(Task.FromResult<User?>(user));
+        userManager
+            .ConfirmEmailAsync(user, token)
+            .Returns(Task.FromResult(IdentityResult.Success));
+
+        // Act
+        var result = await sut.ConfirmEmail(user.Id, token);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        await userManager.Received(1).FindByIdAsync(user.Id);
+        await userManager.Received(1).ConfirmEmailAsync(user, token);
+    }
+
+    [Fact]
     public async Task GeneratePasswordResetToken_WhenEmailIsInvalid_ReturnsBadRequestAndDoesNotLookupUser()
     {
         // Arrange
