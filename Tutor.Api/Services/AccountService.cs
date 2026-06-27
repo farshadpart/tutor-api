@@ -10,6 +10,7 @@ using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Constants;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
+using Tutor.Api.Services.Interfaces;
 using Tutor.Api.Utilities;
 
 namespace Tutor.Api.Services
@@ -17,7 +18,7 @@ namespace Tutor.Api.Services
     public class AccountService(
         AppSettings appSettings,
         UserManager<User> userManager,
-        SubscriptionService subscriptionService,
+        ISubscriptionService subscriptionService,
         IRefreshTokenService refreshTokenService,
         ILogger<AccountService> logger)
     {

@@ -5,13 +5,14 @@ using Tutor.Api.Models.Exceptions;
 using Tutor.Api.Models.Subscriptions;
 using Tutor.Api.Models.Tutor.Api.Contracts.Subscription;
 using SerilogTimings;
+using Tutor.Api.Services.Interfaces;
 
 namespace Tutor.Api.Services
 {
     public class SubscriptionService(
         SubscriptionAssertionService subscriptionAssertionService,
         TutorContext tutorContext,
-        ILogger<SubscriptionService> logger)
+        ILogger<SubscriptionService> logger) : ISubscriptionService
     {
         public async Task Create(CreateSubscriptionRequest createRequest)
         {

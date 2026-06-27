@@ -9,7 +9,9 @@ using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
 using Tutor.Api.Services;
+using Tutor.Api.Services.Interfaces;
 using Tutor.Api.Tests.Utility;
+using Tutor.Api.Utilities;
 
 namespace Tutor.Api.Tests.Services;
 
@@ -436,14 +438,155 @@ public class AccountServiceTests
         await refreshTokenService.Received(1).RevokeAllUserRefreshTokensByUserId(user.Id, ip);
     }
 
-    private static AccountService CreateService(UserManager<User> userManager, IRefreshTokenService? refreshTokenService = null)
+    [Fact]
+    public async Task RefreshAsync_WhenTokenDoesNotExist_ReturnsUnauthorizedAndDoesNotRotateToken()
+    {
+        // Arrange
+        var userManager = CreateUserManager();
+        var refreshTokenService = CreateRefreshTokenService();
+        var sut = CreateService(userManager, refreshTokenService);
+
+        refreshTokenService
+            .GetRefreshTokens(Arg.Any<Func<RefreshToken, bool>>())
+            .Returns([]);
+
+        // Act
+        var result = await sut.RefreshAsync("missing-refresh-token", "127.0.0.1", "unit-test");
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Refresh token is not valid!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("Unauthorized");
+        await refreshTokenService.DidNotReceive().RevokeAllUserRefreshTokens(Arg.Any<string>(), Arg.Any<string>());
+        await refreshTokenService.DidNotReceive().Add(Arg.Any<RefreshToken>());
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenTokenIsInactive_ReturnsUnauthorizedAndDoesNotRotateToken()
+    {
+        // Arrange
+        const string refreshTokenRaw = "expired-refresh-token";
+        var userManager = CreateUserManager();
+        var refreshTokenService = CreateRefreshTokenService();
+        var sut = CreateService(userManager, refreshTokenService);
+        var refreshToken = new RefreshToken(
+            "user-1",
+            TokenHelpers.Sha256(refreshTokenRaw),
+            DateTimeOffset.UtcNow.AddDays(-10),
+            DateTimeOffset.UtcNow.AddDays(-1),
+            "old-agent",
+            "127.0.0.1")
+        {
+            User = new User { Id = "user-1", Email = "student@example.com" }
+        };
+
+        refreshTokenService
+            .GetRefreshTokens(Arg.Any<Func<RefreshToken, bool>>())
+            .Returns(callInfo => new[] { refreshToken }.Where(callInfo.Arg<Func<RefreshToken, bool>>()).ToList());
+
+        // Act
+        var result = await sut.RefreshAsync(refreshTokenRaw, "127.0.0.2", "unit-test");
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Refresh token is not valid!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("Unauthorized");
+        await refreshTokenService.DidNotReceive().RevokeAllUserRefreshTokens(Arg.Any<string>(), Arg.Any<string>());
+        await refreshTokenService.DidNotReceive().Add(Arg.Any<RefreshToken>());
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenTokenIsActive_RotatesRefreshTokenAndReturnsNewTokenHolder()
+    {
+        // Arrange
+        const string refreshTokenRaw = "valid-refresh-token";
+        const string ip = "127.0.0.2";
+        const string userAgent = "unit-test";
+        var user = new User
+        {
+            Id = "user-1",
+            Email = "student@example.com",
+            UserName = "student@example.com"
+        };
+        var userManager = CreateUserManager();
+        var refreshTokenService = CreateRefreshTokenService();
+        var sut = CreateService(userManager, refreshTokenService, CreateSubscriptionService());
+        var refreshToken = new RefreshToken(
+            user.Id,
+            TokenHelpers.Sha256(refreshTokenRaw),
+            DateTimeOffset.UtcNow.AddMinutes(-5),
+            DateTimeOffset.UtcNow.AddDays(1),
+            "old-agent",
+            "127.0.0.1")
+        {
+            User = user
+        };
+        RefreshToken? addedRefreshToken = null;
+
+        refreshTokenService
+            .GetRefreshTokens(Arg.Any<Func<RefreshToken, bool>>())
+            .Returns(callInfo => new[] { refreshToken }.Where(callInfo.Arg<Func<RefreshToken, bool>>()).ToList());
+        refreshTokenService
+            .Add(Arg.Do<RefreshToken>(token => addedRefreshToken = token))
+            .Returns(Task.CompletedTask);
+        userManager
+            .GetRolesAsync(user)
+            .Returns(Task.FromResult<IList<string>>([]));
+        userManager
+            .GetClaimsAsync(user)
+            .Returns(Task.FromResult<IList<System.Security.Claims.Claim>>([]));
+
+        // Act
+        var result = await sut.RefreshAsync(refreshTokenRaw, ip, userAgent);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.AccessToken.Token.ShouldNotBeNullOrWhiteSpace();
+        result.Value.RefreshToken.Token.ShouldNotBe(refreshTokenRaw);
+        addedRefreshToken.ShouldNotBeNull();
+        TokenHelpers.Sha256(result.Value.RefreshToken.Token).ShouldBe(addedRefreshToken.TokenHash);
+        result.Value.RefreshToken.Expiration.ShouldBe(addedRefreshToken.ExpiresAt.DateTime);
+        addedRefreshToken.UserId.ShouldBe(user.Id);
+        addedRefreshToken.UserAgent.ShouldBe(userAgent);
+        addedRefreshToken.CreatedByIp.ShouldBe(ip);
+        refreshToken.RevokedAt.ShouldNotBeNull();
+        refreshToken.RevokedByIp.ShouldBe(ip);
+        refreshToken.ReplacedByTokenHash.ShouldBe(addedRefreshToken.TokenHash);
+        await refreshTokenService.Received(1).RevokeAllUserRefreshTokens(refreshToken.TokenHash, ip);
+        await refreshTokenService.Received(1).Add(Arg.Any<RefreshToken>());
+    }
+
+    private static AccountService CreateService(
+        UserManager<User> userManager,
+        IRefreshTokenService? refreshTokenService = null,
+        ISubscriptionService? subscriptionService = null)
     {
         return new AccountService(
-            new AppSettings(),
+            CreateAppSettings(),
             userManager,
-            null!,
+            subscriptionService!,
             refreshTokenService!,
             new TestLogger<AccountService>());
+    }
+
+    private static AppSettings CreateAppSettings()
+    {
+        return new AppSettings
+        {
+            Jwt = new JWT
+            {
+                Issuer = "Tutor.Api.Tests",
+                Audience = "Tutor.Api.Tests",
+                AccessTokenExpirationMinutes = 15,
+                RefreshTokenExpirationDays = 7,
+                SecretKey = "unit-test-secret-key-with-at-least-32-chars"
+            }
+        };
+    }
+
+    private static ISubscriptionService CreateSubscriptionService()
+    {
+        return Substitute.For<ISubscriptionService>();
     }
 
     private static string EncodeResetToken(string token)

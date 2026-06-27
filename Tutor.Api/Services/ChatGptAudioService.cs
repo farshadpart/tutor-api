@@ -6,7 +6,7 @@ using Tutor.Api.Services.Interfaces;
 namespace Tutor.Api.Services
 {
     public class ChatGptAudioService(
-        SubscriptionService subscriptionService,
+        ISubscriptionService subscriptionService,
         IChatGptAudioClient chatGptAudioClient,
         ILogger<ChatGptAudioService> logger)
     {

@@ -5,7 +5,7 @@ using Tutor.Api.Services.Interfaces;
 namespace Tutor.Api.Services
 {
     public class ChatGptChatService(
-        SubscriptionService subscriptionService,
+        ISubscriptionService subscriptionService,
         IChatGptChatClient chatGptChatClient,
         ILogger<ChatGptChatService> logger)
     {

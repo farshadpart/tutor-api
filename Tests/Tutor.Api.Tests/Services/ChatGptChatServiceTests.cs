@@ -95,7 +95,7 @@ public class ChatGptChatServiceTests
     }
 
     private static ChatGptChatService CreateService(
-        SubscriptionService subscriptionService,
+        ISubscriptionService subscriptionService,
         IChatGptChatClient chatGptChatClient)
     {
         return new ChatGptChatService(
@@ -104,12 +104,9 @@ public class ChatGptChatServiceTests
             new TestLogger<ChatGptChatService>());
     }
 
-    private static SubscriptionService CreateSubscriptionService()
+    private static ISubscriptionService CreateSubscriptionService()
     {
-        var subscriptionService = Substitute.For<SubscriptionService>(
-            null!,
-            null!,
-            new TestLogger<SubscriptionService>());
+        var subscriptionService = Substitute.For<ISubscriptionService>();
 
         subscriptionService.Assert(Arg.Any<string>()).Returns(Task.CompletedTask);
         subscriptionService.RegisterRequest(Arg.Any<string>()).Returns(Task.CompletedTask);

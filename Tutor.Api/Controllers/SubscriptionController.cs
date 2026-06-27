@@ -2,13 +2,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Tutor.Api.Models.Tutor.Api.Contracts.Subscription;
 using Tutor.Api.Services;
+using Tutor.Api.Services.Interfaces;
 
 namespace Tutor.Api.Controllers
 {
     [Authorize]
     [ApiController]
     [Route("[controller]")]
-    public class SubscriptionController(SubscriptionService SubscriptionService, ILogger<SubscriptionController> Logger) : ControllerBase
+    public class SubscriptionController(ISubscriptionService SubscriptionService, ILogger<SubscriptionController> Logger) : ControllerBase
     {
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] CreateSubscriptionRequest createRequest)
