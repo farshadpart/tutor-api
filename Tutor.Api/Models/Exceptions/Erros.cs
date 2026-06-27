@@ -16,5 +16,6 @@
         public const string COULD_NOT_ACQUIRE_LOCK_FOR_USER_UPDATE = "Could not acquire lock for user update";
         public const string FAILED_VALIDATE_QUEUED_CYCLE = "Failed to validate queued cycle for user!";
         public const string DEEP_CLONE_FAILED = "Failed to deep clone the object!";
+        public const string CHATGPT_AUDIO_TRANSCRIPTION_FAILED = "Failed to transcribe audio!";
     }
 }

@@ -1,12 +1,15 @@
 ﻿using OpenAI.Audio;
+using Tutor.Api.Models.Exceptions;
 using SerilogTimings;
+using Tutor.Api.Services.Interfaces;
 
 namespace Tutor.Api.Services
 {
-    public class ChatGptAudioService(SubscriptionService subscriptionService, ILogger<ChatGptAudioService> logger)
+    public class ChatGptAudioService(
+        SubscriptionService subscriptionService,
+        IChatGptAudioClient chatGptAudioClient,
+        ILogger<ChatGptAudioService> logger)
     {
-        private readonly AudioClient _client = new("whisper-1", Environment.GetEnvironmentVariable("TutorKey"));
-
         public async Task<string> Transcribe(IFormFile audioFile, string userId)
         {
             logger.LogInformation(
@@ -27,7 +30,7 @@ namespace Tutor.Api.Services
                 Language = "en"
             };
 
-            AudioTranscription transcription;
+            string transcription;
             using (var operation = Operation.Begin("Transcribe audio with OpenAI for user {UserId}", userId))
             {
                 try
@@ -37,7 +40,7 @@ namespace Tutor.Api.Services
                         userId,
                         options.ResponseFormat,
                         options.Language);
-                    transcription = _client.TranscribeAudio(audioFile.OpenReadStream(), audioFile.FileName, options);
+                    transcription = chatGptAudioClient.Transcribe(audioFile.OpenReadStream(), audioFile.FileName, options);
                     operation.Complete();
                 }
                 catch (Exception ex)
@@ -45,20 +48,20 @@ namespace Tutor.Api.Services
                     logger.LogError(ex, "OpenAI audio transcription failed for user {UserId}.", userId);
                     operation.SetException(ex);
                     operation.Abandon();
-                    throw;
+                    throw new TutorException(Errors.CHATGPT_AUDIO_TRANSCRIPTION_FAILED);
                 }
             }
 
             logger.LogInformation(
                 "OpenAI audio transcription succeeded for user {UserId}; transcription length {TranscriptionLength}.",
                 userId,
-                transcription.Text.Length);
+                transcription.Length);
 
             logger.LogDebug("Registering subscription usage after audio transcription for user {UserId}.", userId);
             await subscriptionService.RegisterRequest(userId);
             logger.LogDebug("Subscription usage registered after audio transcription for user {UserId}.", userId);
 
-            return transcription.Text;
+            return transcription;
         }
     }
 }

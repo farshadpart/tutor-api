@@ -65,7 +65,7 @@ namespace Tutor.Api.Services
                 subscription.Cycles.First().Id);
         }
 
-        public async Task RegisterRequest(string userId)
+        public virtual async Task RegisterRequest(string userId)
         {
             logger.LogDebug("Registering subscription request usage for user {UserId}.", userId);
 
@@ -129,7 +129,7 @@ namespace Tutor.Api.Services
             return useableSubscription?.Group;
         }
 
-        public async Task Assert(string userId)
+        public virtual async Task Assert(string userId)
         {
             using var operation = Operation.Begin("Assert subscription for user {UserId}", userId);
 

@@ -4,7 +4,7 @@ using Tutor.Api.Models.Subscriptions;
 
 namespace Tutor.Api.Services
 {
-    public class PrerequisitesService(UserManager<User> UserManager, ILogger<PrerequisitesService> Logger)
+    public class PrerequisitesService(UserManager<User> userManager, ILogger<PrerequisitesService> logger)
     {
         public async Task InsertInitialData()
         {
@@ -14,7 +14,7 @@ namespace Tutor.Api.Services
         private async Task InsertGoogleUser()
         {
             string googleUserId = "f1620f14-07df-4f6f-bf05-57587d3fefc7";
-            var userIdentityResult = await UserManager.FindByIdAsync(googleUserId);
+            var userIdentityResult = await userManager.FindByIdAsync(googleUserId);
             if (userIdentityResult is not null)
                 return;
 
@@ -33,7 +33,7 @@ namespace Tutor.Api.Services
                 StartedAt = DateTime.UtcNow
             });
 
-            var creationResult = await UserManager.CreateAsync(new User
+            var creationResult = await userManager.CreateAsync(new User
             {
                 Id = googleUserId,
                 UserName = "googleStoreUser",
@@ -42,22 +42,22 @@ namespace Tutor.Api.Services
 
             if (creationResult.Errors.Any())
             {
-                Logger.LogError("Failed to create the googleStoreUser.\nErrors: {@googleUserCreationErrors}", creationResult.Errors);
+                logger.LogError("Failed to create the googleStoreUser.\nErrors: {@googleUserCreationErrors}", creationResult.Errors);
                 return;
             }
 
-            var identityGoogleUser = await UserManager.FindByIdAsync(googleUserId);
+            var identityGoogleUser = await userManager.FindByIdAsync(googleUserId);
             if(identityGoogleUser is null)
             {
-                Logger.LogError("Failed to find the googleStoreUser.");
+                logger.LogError("Failed to find the googleStoreUser.");
                 return;
             }
 
             identityGoogleUser.EmailConfirmed = true;
-            var updateResult  = await UserManager.UpdateAsync(identityGoogleUser);
+            var updateResult  = await userManager.UpdateAsync(identityGoogleUser);
             if (updateResult.Errors.Any())
             {
-                Logger.LogError("Failed to enable EmailConfirmed in the googleStoreUser.\nErrors: {@googleUserCreationErrors}", updateResult.Errors);
+                logger.LogError("Failed to enable EmailConfirmed in the googleStoreUser.\nErrors: {@googleUserCreationErrors}", updateResult.Errors);
                 return;
             }
         }
