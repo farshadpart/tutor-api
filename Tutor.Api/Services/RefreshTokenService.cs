@@ -6,7 +6,7 @@ using Tutor.Api.Utilities;
 
 namespace Tutor.Api.Services
 {
-    public class RefreshTokenService(TutorContext TutorContext, AppSettings AppSettings, ILogger<RefreshTokenService> Logger)
+    public class RefreshTokenService(TutorContext TutorContext, AppSettings AppSettings, ILogger<RefreshTokenService> Logger) : IRefreshTokenService
     {
         public async Task Add(RefreshToken refreshToken)
         {

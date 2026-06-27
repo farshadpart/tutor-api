@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shouldly;
+using System.Text;
 using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
@@ -116,14 +118,140 @@ public class AccountServiceTests
         exception.Message.ShouldBe("Method GenerateEmailConfirmationTokenAsync failed to generate the confirmation token!");
     }
 
-    private static AccountService CreateService(UserManager<User> userManager)
+    [Fact]
+    public async Task ResetPassword_WhenEmailIsInvalid_ReturnsBadRequestAndDoesNotLookupUser()
+    {
+        // Arrange
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestResetPassword("not-an-email", "token", "NewPassword1!");
+
+        // Act
+        var result = await sut.ResetPassword(request, "127.0.0.1");
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("The entered email address is not valid!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
+        await userManager.DidNotReceive().FindByEmailAsync(Arg.Any<string>());
+        await userManager.DidNotReceive().ResetPasswordAsync(Arg.Any<User>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task ResetPassword_WhenUserDoesNotExist_ReturnsBadRequestAndDoesNotResetPassword()
+    {
+        // Arrange
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestResetPassword("student@example.com", EncodeResetToken("reset-token"), "NewPassword1!");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(null));
+
+        // Act
+        var result = await sut.ResetPassword(request, "127.0.0.1");
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Invalid password!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
+        await userManager.Received(1).FindByEmailAsync(request.Email);
+        await userManager.DidNotReceive().ResetPasswordAsync(Arg.Any<User>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task ResetPassword_WhenTokenIsNotBase64Url_ReturnsBadRequestAndDoesNotResetPassword()
+    {
+        // Arrange
+        var user = new User { Id = "user-1", Email = "student@example.com" };
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestResetPassword(user.Email, "not a valid base64url token", "NewPassword1!");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(user));
+
+        // Act
+        var result = await sut.ResetPassword(request, "127.0.0.1");
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Invalid password reset request!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
+        await userManager.Received(1).FindByEmailAsync(request.Email);
+        await userManager.DidNotReceive().ResetPasswordAsync(Arg.Any<User>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task ResetPassword_WhenIdentityResetFails_ReturnsBadRequest()
+    {
+        // Arrange
+        var user = new User { Id = "user-1", Email = "student@example.com" };
+        var resetToken = "reset-token";
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestResetPassword(user.Email, EncodeResetToken(resetToken), "NewPassword1!");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(user));
+        userManager
+            .ResetPasswordAsync(user, resetToken, request.NewPassword)
+            .Returns(Task.FromResult(IdentityResult.Failed(new IdentityError { Code = "InvalidToken" })));
+
+        // Act
+        var result = await sut.ResetPassword(request, "127.0.0.1");
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Invalid password reset request!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
+        await userManager.Received(1).ResetPasswordAsync(user, resetToken, request.NewPassword);
+    }
+
+    [Fact]
+    public async Task ResetPassword_WhenIdentityResetSucceeds_RevokesRefreshTokensAndReturnsSuccess()
+    {
+        // Arrange
+        const string ip = "127.0.0.1";
+        var user = new User { Id = "user-1", Email = "student@example.com" };
+        var resetToken = "reset-token";
+        var userManager = CreateUserManager();
+        var refreshTokenService = CreateRefreshTokenService();
+        var sut = CreateService(userManager, refreshTokenService);
+        var request = new RequestResetPassword(user.Email, EncodeResetToken(resetToken), "NewPassword1!");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(user));
+        userManager
+            .ResetPasswordAsync(user, resetToken, request.NewPassword)
+            .Returns(Task.FromResult(IdentityResult.Success));
+
+        // Act
+        var result = await sut.ResetPassword(request, ip);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        await userManager.Received(1).ResetPasswordAsync(user, resetToken, request.NewPassword);
+        await refreshTokenService.Received(1).RevokeAllUserRefreshTokensByUserId(user.Id, ip);
+    }
+
+    private static AccountService CreateService(UserManager<User> userManager, IRefreshTokenService? refreshTokenService = null)
     {
         return new AccountService(
             new AppSettings(),
             userManager,
             null!,
-            null!,
+            refreshTokenService!,
             new TestLogger<AccountService>());
+    }
+
+    private static string EncodeResetToken(string token)
+    {
+        return WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
     }
 
     private static UserManager<User> CreateUserManager()
@@ -138,5 +266,15 @@ public class AccountServiceTests
             new IdentityErrorDescriber(),
             Substitute.For<IServiceProvider>(),
             Substitute.For<ILogger<UserManager<User>>>());
+    }
+
+    private static IRefreshTokenService CreateRefreshTokenService()
+    {
+        var refreshTokenService = Substitute.For<IRefreshTokenService>();
+        refreshTokenService
+            .RevokeAllUserRefreshTokensByUserId(Arg.Any<string>(), Arg.Any<string>())
+            .Returns(Task.CompletedTask);
+
+        return refreshTokenService;
     }
 }

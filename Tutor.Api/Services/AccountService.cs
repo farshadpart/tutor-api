@@ -18,7 +18,7 @@ namespace Tutor.Api.Services
         AppSettings appSettings,
         UserManager<User> userManager,
         SubscriptionService subscriptionService,
-        RefreshTokenService refreshTokenService,
+        IRefreshTokenService refreshTokenService,
         ILogger<AccountService> logger)
     {
         public async Task<Result<User>> ValidateLoginRequest(RequestLogin requestLogin)
