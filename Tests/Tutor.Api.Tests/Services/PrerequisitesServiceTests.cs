@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using Shouldly;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Subscriptions;
 using Tutor.Api.Services;
@@ -63,25 +64,25 @@ public class PrerequisitesServiceTests
         await userManager.Received(2).FindByIdAsync(GoogleUserId);
         await userManager.Received(1).CreateAsync(Arg.Any<User>(), GoogleUserPassword);
         await userManager.Received(1).UpdateAsync(Arg.Any<User>());
-        Assert.Equal(GoogleUserPassword, createdPassword);
-        Assert.Same(createdUser, updatedUser);
+        createdPassword.ShouldBe(GoogleUserPassword);
+        updatedUser.ShouldBeSameAs(createdUser);
         AssertNoLogs(logger);
 
-        createdUser = Assert.IsType<User>(createdUser);
-        Assert.Equal(GoogleUserId, createdUser.Id);
-        Assert.Equal("googleStoreUser", createdUser.UserName);
-        Assert.True(createdUser.EmailConfirmed);
+        createdUser.ShouldBeOfType<User>();
+        createdUser.Id.ShouldBe(GoogleUserId);
+        createdUser.UserName.ShouldBe("googleStoreUser");
+        createdUser.EmailConfirmed.ShouldBeTrue();
 
-        var subscription = Assert.Single(createdUser.Subscriptions);
-        Assert.Equal(SubscriptionGroup.Basic, subscription.Group);
-        Assert.NotEqual(default, subscription.CreatedAt);
+        var subscription = createdUser.Subscriptions.ShouldHaveSingleItem();
+        subscription.Group.ShouldBe(SubscriptionGroup.Basic);
+        subscription.CreatedAt.ShouldNotBe(default);
 
-        var cycle = Assert.Single(subscription.Cycles);
-        Assert.Equal(CycleSizeHelper.GetDuration(CycleSize.PlayTest), cycle.Duration);
-        Assert.Equal(CycleSizeHelper.GetValidRequestCount(CycleSize.PlayTest), cycle.ValidRequestCount);
-        Assert.Equal(CycleStatus.Active, cycle.Status);
-        Assert.NotEqual(default, cycle.CreatedAt);
-        Assert.NotNull(cycle.StartedAt);
+        var cycle = subscription.Cycles.ShouldHaveSingleItem();
+        cycle.Duration.ShouldBe(CycleSizeHelper.GetDuration(CycleSize.PlayTest));
+        cycle.ValidRequestCount.ShouldBe(CycleSizeHelper.GetValidRequestCount(CycleSize.PlayTest));
+        cycle.Status.ShouldBe(CycleStatus.Active);
+        cycle.CreatedAt.ShouldNotBe(default);
+        cycle.StartedAt.ShouldNotBeNull();
     }
 
     [Fact]
@@ -156,7 +157,7 @@ public class PrerequisitesServiceTests
         await userManager.Received(2).FindByIdAsync(GoogleUserId);
         await userManager.Received(1).CreateAsync(Arg.Any<User>(), GoogleUserPassword);
         await userManager.Received(1).UpdateAsync(Arg.Any<User>());
-        Assert.True(updatedUser?.EmailConfirmed);
+        updatedUser?.EmailConfirmed.ShouldBeTrue();
         AssertSingleLog(logger, LogLevel.Error, "Failed to enable EmailConfirmed in the googleStoreUser.");
     }
 
@@ -176,17 +177,20 @@ public class PrerequisitesServiceTests
 
     private static void AssertNoLogs(ILogger<PrerequisitesService> logger)
     {
-        Assert.DoesNotContain(logger.ReceivedCalls(), call => call.GetMethodInfo().Name == nameof(ILogger.Log));
+        logger.ReceivedCalls().ShouldNotContain(call => call.GetMethodInfo().Name == nameof(ILogger.Log));
     }
 
     private static void AssertSingleLog(ILogger<PrerequisitesService> logger, LogLevel level, string message)
     {
-        var call = Assert.Single(
-            logger.ReceivedCalls(),
-            call => call.GetMethodInfo().Name == nameof(ILogger.Log));
+        var call = logger
+            .ReceivedCalls()
+            .Where(call => call.GetMethodInfo().Name == nameof(ILogger.Log))
+            .ShouldHaveSingleItem();
         var arguments = call.GetArguments();
+        var logMessage = arguments[2]?.ToString();
 
-        Assert.Equal(level, arguments[0]);
-        Assert.Contains(message, arguments[2]?.ToString());
+        arguments[0].ShouldBe(level);
+        logMessage.ShouldNotBeNull();
+        logMessage.ShouldContain(message);
     }
 }
