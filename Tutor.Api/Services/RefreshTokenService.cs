@@ -64,18 +64,24 @@ namespace Tutor.Api.Services
         public async Task RevokeAllUserRefreshTokensByUserId(string userId, string ip)
         {
             var now = DateTimeOffset.UtcNow;
-            var revokedCount = await tutorContext.RefreshTokens
+            var refreshTokens = await tutorContext.RefreshTokens
                 .Where(t =>
                     t.UserId == userId &&
                     t.RevokedAt == null &&
                     t.ExpiresAt > now)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(t => t.RevokedAt, now)
-                    .SetProperty(t => t.RevokedByIp, ip));
+                .ToListAsync();
+
+            foreach (var refreshToken in refreshTokens)
+            {
+                refreshToken.RevokedAt = now;
+                refreshToken.RevokedByIp = ip;
+            }
+
+            await tutorContext.SaveChangesAsync();
 
             logger.LogInformation(
                 "Revoked {RefreshTokenCount} active refresh token(s) for user {UserId} from IP {Ip}.",
-                revokedCount,
+                refreshTokens.Count,
                 userId,
                 ip);
         }
