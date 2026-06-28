@@ -29,28 +29,41 @@ namespace Tutor.Api.Services
 
         public async Task RevokeAllUserRefreshTokens(string refreshTokenHash, string ip)
         {
-            var now = DateTime.UtcNow;
-            var revokedCount = await tutorContext.RefreshTokens
-                .Where(t =>
-                    t.CreatedByIp == ip &&
-                    t.RevokedAt == null &&
-                    t.ExpiresAt > now &&
-                    tutorContext.RefreshTokens.Any(x =>
-                        x.TokenHash == refreshTokenHash &&
-                        x.UserId == t.UserId))
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(t => t.RevokedAt, now)
-                    .SetProperty(t => t.RevokedByIp, ip));
+            var now = DateTimeOffset.UtcNow;
+            var userId = await tutorContext.RefreshTokens
+                .Where(t => t.TokenHash == refreshTokenHash)
+                .Select(t => t.UserId)
+                .SingleOrDefaultAsync();
+
+            List<RefreshToken> refreshTokens = [];
+            if (userId is not null)
+            {
+                refreshTokens = await tutorContext.RefreshTokens
+                    .Where(t =>
+                        t.UserId == userId &&
+                        t.CreatedByIp == ip &&
+                        t.RevokedAt == null &&
+                        t.ExpiresAt > now)
+                    .ToListAsync();
+
+                foreach (var refreshToken in refreshTokens)
+                {
+                    refreshToken.RevokedAt = now;
+                    refreshToken.RevokedByIp = ip;
+                }
+
+                await tutorContext.SaveChangesAsync();
+            }
 
             logger.LogInformation(
                 "Revoked {RefreshTokenCount} active refresh token(s) from IP {Ip} using presented refresh token.",
-                revokedCount,
+                refreshTokens.Count,
                 ip);
         }
 
         public async Task RevokeAllUserRefreshTokensByUserId(string userId, string ip)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             var revokedCount = await tutorContext.RefreshTokens
                 .Where(t =>
                     t.UserId == userId &&

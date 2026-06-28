@@ -141,6 +141,122 @@ public class RefreshTokenServiceTests
         logEntry.Message.ShouldContain("Refresh token persisted for user user-1 from IP 127.0.0.1");
     }
 
+    [Fact]
+    public async Task RevokeAllUserRefreshTokens_WhenMatchingActiveTokensExist_RevokesOnlyMatchingUsersTokensFromIpAndLogsInformation()
+    {
+        // Arrange
+        var options = CreateDbContextOptions();
+        var now = DateTimeOffset.UtcNow;
+        var ip = "127.0.0.1";
+        var otherIp = "127.0.0.2";
+        var matchingRefreshTokenHash = "matching-refresh-token-hash";
+        var user1 = new User
+        {
+            Id = "user-1",
+            UserName = "user1@example.com",
+            Email = "user1@example.com"
+        };
+        var user2 = new User
+        {
+            Id = "user-2",
+            UserName = "user2@example.com",
+            Email = "user2@example.com"
+        };
+        var activeSameUserSameIp = new RefreshToken(
+            user1.Id,
+            matchingRefreshTokenHash,
+            now.AddDays(-1),
+            now.AddDays(7),
+            "Mozilla/5.0",
+            ip);
+        var anotherActiveSameUserSameIp = new RefreshToken(
+            user1.Id,
+            "another-active-same-user-same-ip",
+            now.AddDays(-1),
+            now.AddDays(7),
+            "Mozilla/5.0",
+            ip);
+        var activeSameUserOtherIp = new RefreshToken(
+            user1.Id,
+            "active-same-user-other-ip",
+            now.AddDays(-1),
+            now.AddDays(7),
+            "Mozilla/5.0",
+            otherIp);
+        var expiredSameUserSameIp = new RefreshToken(
+            user1.Id,
+            "expired-same-user-same-ip",
+            now.AddDays(-7),
+            now.AddDays(-1),
+            "Mozilla/5.0",
+            ip);
+        var alreadyRevokedSameUserSameIp = new RefreshToken(
+            user1.Id,
+            "already-revoked-same-user-same-ip",
+            now.AddDays(-1),
+            now.AddDays(7),
+            "Mozilla/5.0",
+            ip)
+        {
+            RevokedAt = now.AddHours(-1),
+            RevokedByIp = otherIp
+        };
+        var activeOtherUserSameIp = new RefreshToken(
+            user2.Id,
+            "active-other-user-same-ip",
+            now.AddDays(-1),
+            now.AddDays(7),
+            "Mozilla/5.0",
+            ip);
+
+        await using (var seedContext = new TutorContext(options))
+        {
+            seedContext.Users.AddRange(user1, user2);
+            seedContext.RefreshTokens.AddRange(
+                activeSameUserSameIp,
+                anotherActiveSameUserSameIp,
+                activeSameUserOtherIp,
+                expiredSameUserSameIp,
+                alreadyRevokedSameUserSameIp,
+                activeOtherUserSameIp);
+            await seedContext.SaveChangesAsync();
+        }
+
+        var logger = new TestLogger<RefreshTokenService>();
+        await using var context = new TutorContext(options);
+        var sut = new RefreshTokenService(context, new AppSettings(), logger);
+        var startedAt = DateTimeOffset.UtcNow;
+
+        // Act
+        await sut.RevokeAllUserRefreshTokens(matchingRefreshTokenHash, ip);
+
+        // Assert
+        await using var assertionContext = new TutorContext(options);
+        var refreshTokens = await assertionContext.RefreshTokens
+            .ToDictionaryAsync(x => x.TokenHash);
+
+        refreshTokens[matchingRefreshTokenHash].RevokedAt.ShouldNotBeNull();
+        refreshTokens[matchingRefreshTokenHash].RevokedAt!.Value.ShouldBeGreaterThanOrEqualTo(startedAt);
+        refreshTokens[matchingRefreshTokenHash].RevokedByIp.ShouldBe(ip);
+
+        refreshTokens["another-active-same-user-same-ip"].RevokedAt.ShouldNotBeNull();
+        refreshTokens["another-active-same-user-same-ip"].RevokedAt!.Value.ShouldBeGreaterThanOrEqualTo(startedAt);
+        refreshTokens["another-active-same-user-same-ip"].RevokedByIp.ShouldBe(ip);
+
+        refreshTokens["active-same-user-other-ip"].RevokedAt.ShouldBeNull();
+        refreshTokens["active-same-user-other-ip"].RevokedByIp.ShouldBeNull();
+        refreshTokens["expired-same-user-same-ip"].RevokedAt.ShouldBeNull();
+        refreshTokens["expired-same-user-same-ip"].RevokedByIp.ShouldBeNull();
+        refreshTokens["already-revoked-same-user-same-ip"].RevokedAt.ShouldBe(alreadyRevokedSameUserSameIp.RevokedAt);
+        refreshTokens["already-revoked-same-user-same-ip"].RevokedByIp.ShouldBe(otherIp);
+        refreshTokens["active-other-user-same-ip"].RevokedAt.ShouldBeNull();
+        refreshTokens["active-other-user-same-ip"].RevokedByIp.ShouldBeNull();
+
+        var logEntry = logger.Entries.ShouldHaveSingleItem();
+        logEntry.Level.ShouldBe(LogLevel.Information);
+        logEntry.Message.ShouldContain("Revoked 2 active refresh token(s) from IP 127.0.0.1 using presented refresh token.");
+    }
+
     private static DbContextOptions<TutorContext> CreateDbContextOptions()
     {
         return new DbContextOptionsBuilder<TutorContext>()
