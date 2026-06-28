@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
 using Tutor.Api.Services;
+using Tutor.Api.Services.Interfaces;
 using Tutor.Api.Utilities;
 
 namespace Tutor.Api.Controllers

@@ -1,6 +1,6 @@
 using Tutor.Api.Models.Account;
 
-namespace Tutor.Api.Services
+namespace Tutor.Api.Services.Interfaces
 {
     public interface IRefreshTokenService
     {
