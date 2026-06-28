@@ -7,13 +7,13 @@ using Tutor.Api.Utilities;
 
 namespace Tutor.Api.Services
 {
-    public class RefreshTokenService(TutorContext TutorContext, AppSettings AppSettings, ILogger<RefreshTokenService> Logger) : IRefreshTokenService
+    public class RefreshTokenService(TutorContext tutorContext, AppSettings appSettings, ILogger<RefreshTokenService> logger) : IRefreshTokenService
     {
         public async Task Add(RefreshToken refreshToken)
         {
-            TutorContext.RefreshTokens.Add(refreshToken);
-            await TutorContext.SaveChangesAsync();
-            Logger.LogDebug(
+            tutorContext.RefreshTokens.Add(refreshToken);
+            await tutorContext.SaveChangesAsync();
+            logger.LogDebug(
                 "Refresh token persisted for user {UserId} from IP {Ip}; expires at {ExpiresAt}.",
                 refreshToken.UserId,
                 refreshToken.CreatedByIp,
@@ -22,27 +22,27 @@ namespace Tutor.Api.Services
 
         public List<RefreshToken> GetRefreshTokens(Func<RefreshToken, bool> func)
         {
-            var refreshTokens = TutorContext.RefreshTokens.Include(x => x.User).Where(func).ToList();
-            Logger.LogDebug("Refresh token lookup returned {TokenCount} record(s).", refreshTokens.Count);
+            var refreshTokens = tutorContext.RefreshTokens.Include(x => x.User).Where(func).ToList();
+            logger.LogDebug("Refresh token lookup returned {TokenCount} record(s).", refreshTokens.Count);
             return refreshTokens;
         }
 
         public async Task RevokeAllUserRefreshTokens(string refreshTokenHash, string ip)
         {
             var now = DateTime.UtcNow;
-            var revokedCount = await TutorContext.RefreshTokens
+            var revokedCount = await tutorContext.RefreshTokens
                 .Where(t =>
                     t.CreatedByIp == ip &&
                     t.RevokedAt == null &&
                     t.ExpiresAt > now &&
-                    TutorContext.RefreshTokens.Any(x =>
+                    tutorContext.RefreshTokens.Any(x =>
                         x.TokenHash == refreshTokenHash &&
                         x.UserId == t.UserId))
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(t => t.RevokedAt, now)
                     .SetProperty(t => t.RevokedByIp, ip));
 
-            Logger.LogInformation(
+            logger.LogInformation(
                 "Revoked {RefreshTokenCount} active refresh token(s) from IP {Ip} using presented refresh token.",
                 revokedCount,
                 ip);
@@ -51,7 +51,7 @@ namespace Tutor.Api.Services
         public async Task RevokeAllUserRefreshTokensByUserId(string userId, string ip)
         {
             var now = DateTime.UtcNow;
-            var revokedCount = await TutorContext.RefreshTokens
+            var revokedCount = await tutorContext.RefreshTokens
                 .Where(t =>
                     t.UserId == userId &&
                     t.RevokedAt == null &&
@@ -60,7 +60,7 @@ namespace Tutor.Api.Services
                     .SetProperty(t => t.RevokedAt, now)
                     .SetProperty(t => t.RevokedByIp, ip));
 
-            Logger.LogInformation(
+            logger.LogInformation(
                 "Revoked {RefreshTokenCount} active refresh token(s) for user {UserId} from IP {Ip}.",
                 revokedCount,
                 userId,
@@ -71,12 +71,12 @@ namespace Tutor.Api.Services
         {
             var refreshRaw = TokenHelpers.GenerateRefreshToken();
             var refreshHash = TokenHelpers.Sha256(refreshRaw);
-            var refreshExp = DateTime.UtcNow.AddDays(AppSettings.Jwt.RefreshTokenExpirationDays);
+            var refreshExp = DateTime.UtcNow.AddDays(appSettings.Jwt.RefreshTokenExpirationDays);
 
             var refreshToken = new RefreshToken(user.Id, refreshHash, DateTime.UtcNow, refreshExp, userAgent, ip);
-            TutorContext.RefreshTokens.Add(refreshToken);
-            await TutorContext.SaveChangesAsync();
-            Logger.LogInformation(
+            tutorContext.RefreshTokens.Add(refreshToken);
+            await tutorContext.SaveChangesAsync();
+            logger.LogInformation(
                 "Issued refresh token {RefreshTokenId} for user {UserId} from IP {Ip}; expires at {ExpiresAt}.",
                 refreshToken.Id,
                 user.Id,
