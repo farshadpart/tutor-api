@@ -2,6 +2,7 @@
 using Tutor.Api.Data;
 using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
+using Tutor.Api.Services.Interfaces;
 using Tutor.Api.Utilities;
 
 namespace Tutor.Api.Services
