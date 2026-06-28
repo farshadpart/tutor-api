@@ -2,11 +2,15 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
 using NSubstitute;
 using Shouldly;
+using System.Security.Claims;
 using System.Text;
 using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
+using Tutor.Api.Models.Constants;
+using Tutor.Api.Models.Subscriptions;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
 using Tutor.Api.Services;
 using Tutor.Api.Services.Interfaces;
@@ -17,6 +21,95 @@ namespace Tutor.Api.Tests.Services;
 
 public class AccountServiceTests
 {
+    [Fact]
+    public async Task CreateAccessToken_WhenUserHasRolesClaimsAndSubscription_ReturnsJwtWithExpectedClaims()
+    {
+        // Arrange
+        var user = new User
+        {
+            Id = "user-1",
+            Email = "student@example.com",
+            UserName = "student"
+        };
+        var userManager = CreateUserManager();
+        var subscriptionService = CreateSubscriptionService();
+        var sut = CreateService(userManager, subscriptionService: subscriptionService);
+        var userClaims = new List<Claim>
+        {
+            new("department", "math"),
+            new("scope", "lessons:read")
+        };
+
+        userManager
+            .GetRolesAsync(user)
+            .Returns(Task.FromResult<IList<string>>(["Student", "Tutor"]));
+        userManager
+            .GetClaimsAsync(user)
+            .Returns(Task.FromResult<IList<Claim>>(userClaims));
+        subscriptionService
+            .GetUserUseableSubscriptionGroup(user.Id)
+            .Returns(SubscriptionGroup.Basic);
+
+        var issuedAfter = DateTime.UtcNow;
+
+        // Act
+        var result = await sut.CreateAccessToken(user);
+
+        // Assert
+        var issuedBefore = DateTime.UtcNow;
+        var token = ReadToken(result.Token);
+
+        result.Token.ShouldNotBeNullOrWhiteSpace();
+        result.Expiration.ShouldBeGreaterThanOrEqualTo(issuedAfter.AddMinutes(15).AddSeconds(-1));
+        result.Expiration.ShouldBeLessThanOrEqualTo(issuedBefore.AddMinutes(15).AddSeconds(1));
+        token.Issuer.ShouldBe("Tutor.Api.Tests");
+        token.Audiences.ShouldHaveSingleItem().ShouldBe("Tutor.Api.Tests");
+        token.ValidTo.ShouldBe(result.Expiration, TimeSpan.FromSeconds(1));
+        token.Claims.ShouldContain(claim => claim.Type == ClaimTypes.Email && claim.Value == user.Email);
+        token.Claims.ShouldContain(claim => claim.Type == ClaimTypes.Name && claim.Value == user.UserName);
+        token.Claims.ShouldContain(claim => claim.Type == TutorClaimTypes.Id && claim.Value == user.Id);
+        token.Claims.ShouldContain(claim => claim.Type == TutorClaimTypes.SubscriptionGroup && claim.Value == nameof(SubscriptionGroup.Basic));
+        token.Claims.ShouldContain(claim => claim.Type == "department" && claim.Value == "math");
+        token.Claims.ShouldContain(claim => claim.Type == "scope" && claim.Value == "lessons:read");
+        token.Claims.Where(claim => claim.Type == ClaimTypes.Role).Select(claim => claim.Value).ShouldBe(["Student", "Tutor"], ignoreOrder: true);
+        await userManager.Received(1).GetRolesAsync(user);
+        await userManager.Received(1).GetClaimsAsync(user);
+        subscriptionService.Received(1).GetUserUseableSubscriptionGroup(user.Id);
+    }
+
+    [Fact]
+    public async Task CreateAccessToken_WhenUserHasNoSubscription_DoesNotAddSubscriptionClaim()
+    {
+        // Arrange
+        var user = new User { Id = "user-1", Email = null, UserName = null };
+        var userManager = CreateUserManager();
+        var subscriptionService = CreateSubscriptionService();
+        var sut = CreateService(userManager, subscriptionService: subscriptionService);
+
+        userManager
+            .GetRolesAsync(user)
+            .Returns(Task.FromResult<IList<string>>([]));
+        userManager
+            .GetClaimsAsync(user)
+            .Returns(Task.FromResult<IList<Claim>>([]));
+        subscriptionService
+            .GetUserUseableSubscriptionGroup(user.Id)
+            .Returns((SubscriptionGroup?)null);
+
+        // Act
+        var result = await sut.CreateAccessToken(user);
+
+        // Assert
+        var token = ReadToken(result.Token);
+
+        token.Claims.ShouldContain(claim => claim.Type == ClaimTypes.Email && claim.Value == string.Empty);
+        token.Claims.ShouldContain(claim => claim.Type == ClaimTypes.Name && claim.Value == string.Empty);
+        token.Claims.ShouldContain(claim => claim.Type == TutorClaimTypes.Id && claim.Value == user.Id);
+        token.Claims.ShouldNotContain(claim => claim.Type == TutorClaimTypes.SubscriptionGroup);
+        token.Claims.ShouldNotContain(claim => claim.Type == ClaimTypes.Role);
+        subscriptionService.Received(1).GetUserUseableSubscriptionGroup(user.Id);
+    }
+
     [Fact]
     public async Task Register_WhenEmailIsInvalid_ReturnsBadRequestAndDoesNotCreateUser()
     {
@@ -587,6 +680,11 @@ public class AccountServiceTests
     private static ISubscriptionService CreateSubscriptionService()
     {
         return Substitute.For<ISubscriptionService>();
+    }
+
+    private static JsonWebToken ReadToken(string token)
+    {
+        return new JsonWebTokenHandler().ReadJsonWebToken(token);
     }
 
     private static string EncodeResetToken(string token)
