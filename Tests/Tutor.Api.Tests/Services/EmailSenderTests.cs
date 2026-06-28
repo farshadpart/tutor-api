@@ -113,6 +113,69 @@ public class EmailSenderTests
         logger.Entries.ShouldHaveSingleItem().Message.ShouldContain("MailJet failed to send email to student@example.com");
     }
 
+    [Fact]
+    public async Task SendPasswordResetLinkAsync_SendsMailJetRequestWithExpectedPayload()
+    {
+        // Arrange
+        const string resetLink = "https://tutor.test/reset-password?user=user-1&token=<reset-token>";
+        var handler = new CapturingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClient = new HttpClient(handler);
+        var appSettings = CreateAppSettings();
+        var sut = new EmailSender(httpClient, appSettings, new TestLogger<EmailSender>());
+        var user = new User { Id = "user-1", Email = "student@example.com", UserName = "student" };
+
+        // Act
+        await sut.SendPasswordResetLinkAsync(user, user.Email, resetLink);
+
+        // Assert
+        handler.Request.ShouldNotBeNull();
+        handler.Request.Method.ShouldBe(HttpMethod.Post);
+        handler.Request.RequestUri.ShouldBe(new Uri(appSettings.MailJet.MailJetSendEndpoint));
+        handler.Request.Headers.Authorization.ShouldBe(new AuthenticationHeaderValue("Basic", Convert.ToBase64String("api-key:api-secret"u8.ToArray())));
+
+        var payload = JsonDocument.Parse(handler.Content);
+        var message = payload.RootElement
+            .GetProperty("Messages")
+            .EnumerateArray()
+            .ShouldHaveSingleItem();
+
+        message.GetProperty("From").GetProperty("Email").GetString().ShouldBe("noreply@tutor.test");
+        message.GetProperty("From").GetProperty("Name").GetString().ShouldBe("Tutor Tests");
+        message.GetProperty("To").EnumerateArray().ShouldHaveSingleItem().GetProperty("Email").GetString().ShouldBe(user.Email);
+        message.GetProperty("Subject").GetString().ShouldBe("Reset your Tutor password");
+
+        var htmlBody = message.GetProperty("HTMLPart").GetString();
+        htmlBody.ShouldNotBeNull();
+        htmlBody.ShouldContain("Password reset");
+        htmlBody.ShouldContain("Reset your password");
+        htmlBody.ShouldContain("Reset password");
+        htmlBody.ShouldContain(WebUtility.HtmlEncode(resetLink));
+        htmlBody.ShouldNotContain(resetLink);
+    }
+
+    [Fact]
+    public async Task SendPasswordResetLinkAsync_WhenMailJetFails_LogsAndThrows()
+    {
+        // Arrange
+        var handler = new CapturingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent("""{"ErrorMessage":"invalid recipient"}""")
+        });
+        var httpClient = new HttpClient(handler);
+        var appSettings = CreateAppSettings();
+        var logger = new TestLogger<EmailSender>();
+        var sut = new EmailSender(httpClient, appSettings, logger);
+        var user = new User { Id = "user-1", Email = "student@example.com", UserName = "student" };
+
+        // Act
+        var exception = await Should.ThrowAsync<InvalidOperationException>(
+            () => sut.SendPasswordResetLinkAsync(user, user.Email, "https://tutor.test/reset-password"));
+
+        // Assert
+        exception.Message.ShouldBe("MailJet failed to send the email.");
+        logger.Entries.ShouldHaveSingleItem().Message.ShouldContain("MailJet failed to send email to student@example.com");
+    }
+
     private static AppSettings CreateAppSettings()
     {
         return new AppSettings
