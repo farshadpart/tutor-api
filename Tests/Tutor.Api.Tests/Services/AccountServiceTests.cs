@@ -22,6 +22,158 @@ namespace Tutor.Api.Tests.Services;
 public class AccountServiceTests
 {
     [Fact]
+    public async Task ValidateLoginRequest_WhenUserDoesNotExist_ReturnsUnauthorizedAndDoesNotCheckPassword()
+    {
+        // Arrange
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestLogin("missing@example.com", "Password1!");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(null));
+        userManager
+            .FindByNameAsync(request.Email)
+            .Returns(Task.FromResult<User?>(null));
+
+        // Act
+        var result = await sut.ValidateLoginRequest(request);
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Invalid email or password!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("Unauthorized");
+        await userManager.Received(1).FindByEmailAsync(request.Email);
+        await userManager.Received(1).FindByNameAsync(request.Email);
+        await userManager.DidNotReceive().CheckPasswordAsync(Arg.Any<User>(), Arg.Any<string>());
+        await userManager.DidNotReceive().IsEmailConfirmedAsync(Arg.Any<User>());
+    }
+
+    [Fact]
+    public async Task ValidateLoginRequest_WhenUserIsFoundByEmailAndPasswordIsInvalid_ReturnsUnauthorized()
+    {
+        // Arrange
+        var user = new User { Id = "user-1", Email = "student@example.com", UserName = "student" };
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestLogin(user.Email, "wrong-password");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(user));
+        userManager
+            .CheckPasswordAsync(user, request.Password)
+            .Returns(Task.FromResult(false));
+
+        // Act
+        var result = await sut.ValidateLoginRequest(request);
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Invalid email or password!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("Unauthorized");
+        await userManager.Received(1).FindByEmailAsync(request.Email);
+        await userManager.DidNotReceive().FindByNameAsync(Arg.Any<string>());
+        await userManager.Received(1).CheckPasswordAsync(user, request.Password);
+        await userManager.DidNotReceive().IsEmailConfirmedAsync(Arg.Any<User>());
+    }
+
+    [Fact]
+    public async Task ValidateLoginRequest_WhenPasswordIsValidButEmailIsNotConfirmed_ReturnsUnauthorized()
+    {
+        // Arrange
+        var user = new User { Id = "user-1", Email = "student@example.com", UserName = "student" };
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestLogin(user.Email, "Password1!");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(user));
+        userManager
+            .CheckPasswordAsync(user, request.Password)
+            .Returns(Task.FromResult(true));
+        userManager
+            .IsEmailConfirmedAsync(user)
+            .Returns(Task.FromResult(false));
+
+        // Act
+        var result = await sut.ValidateLoginRequest(request);
+
+        // Assert
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Email not confirmed!");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("Unauthorized");
+        await userManager.Received(1).CheckPasswordAsync(user, request.Password);
+        await userManager.Received(1).IsEmailConfirmedAsync(user);
+    }
+
+    [Fact]
+    public async Task ValidateLoginRequest_WhenUserIsFoundByUsernameAndCredentialsAreValid_ReturnsUser()
+    {
+        // Arrange
+        var user = new User { Id = "user-1", Email = "student@example.com", UserName = "student" };
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestLogin(user.UserName, "Password1!");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(null));
+        userManager
+            .FindByNameAsync(request.Email)
+            .Returns(Task.FromResult<User?>(user));
+        userManager
+            .CheckPasswordAsync(user, request.Password)
+            .Returns(Task.FromResult(true));
+        userManager
+            .IsEmailConfirmedAsync(user)
+            .Returns(Task.FromResult(true));
+
+        // Act
+        var result = await sut.ValidateLoginRequest(request);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.ShouldBeSameAs(user);
+        await userManager.Received(1).FindByEmailAsync(request.Email);
+        await userManager.Received(1).FindByNameAsync(request.Email);
+        await userManager.Received(1).CheckPasswordAsync(user, request.Password);
+        await userManager.Received(1).IsEmailConfirmedAsync(user);
+    }
+
+    [Fact]
+    public async Task ValidateLoginRequest_WhenUserIsFoundByEmailAndCredentialsAreValid_ReturnsUser()
+    {
+        // Arrange
+        var user = new User { Id = "user-1", Email = "student@example.com", UserName = "student" };
+        var userManager = CreateUserManager();
+        var sut = CreateService(userManager);
+        var request = new RequestLogin(user.Email, "Password1!");
+
+        userManager
+            .FindByEmailAsync(request.Email)
+            .Returns(Task.FromResult<User?>(user));
+        userManager
+            .CheckPasswordAsync(user, request.Password)
+            .Returns(Task.FromResult(true));
+        userManager
+            .IsEmailConfirmedAsync(user)
+            .Returns(Task.FromResult(true));
+
+        // Act
+        var result = await sut.ValidateLoginRequest(request);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.ShouldBeSameAs(user);
+        await userManager.Received(1).FindByEmailAsync(request.Email);
+        await userManager.DidNotReceive().FindByNameAsync(Arg.Any<string>());
+        await userManager.Received(1).CheckPasswordAsync(user, request.Password);
+        await userManager.Received(1).IsEmailConfirmedAsync(user);
+    }
+
+    [Fact]
     public async Task CreateAccessToken_WhenUserHasRolesClaimsAndSubscription_ReturnsJwtWithExpectedClaims()
     {
         // Arrange
