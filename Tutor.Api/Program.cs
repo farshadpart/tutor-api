@@ -153,13 +153,13 @@ namespace Tutor.Api
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
             builder.Services.AddScoped<AccountService>();
-            builder.Services.AddScoped<RefreshTokenService>();
+            builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
             builder.Services.AddScoped<PrerequisitesService>();
             builder.Services.AddScoped<ChatGptAudioService>();
             builder.Services.AddScoped<IChatGptAudioClient, ChatGptAudioClient>();
             builder.Services.AddScoped<IChatGptChatClient, ChatGptChatClient>();
             builder.Services.AddScoped<ChatGptChatService>();
-            builder.Services.AddScoped<SubscriptionService>();
+            builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
             builder.Services.AddSingleton<SubscriptionAssertionService>();
             builder.Services.Configure<AppSettings>(builder.Configuration);
             builder.Services.AddSingleton(sp =>

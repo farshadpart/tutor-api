@@ -11,7 +11,7 @@ namespace Tutor.Api.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class AccountController(AccountService AccountService, RefreshTokenService RefreshTokenService, ILogger<AccountController> Logger, IEmailSender<User> EmailSender) : Controller
+    public class AccountController(AccountService AccountService, IRefreshTokenService RefreshTokenService, ILogger<AccountController> Logger, IEmailSender<User> EmailSender) : Controller
     {
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] RequestLogin requestLogin)

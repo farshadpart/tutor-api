@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Http;
 using OpenAI.Audio;
 using Tutor.Api.Models.Exceptions;
+using Tutor.Api.Models.Subscriptions;
+using Tutor.Api.Models.Tutor.Api.Contracts.Subscription;
 using Tutor.Api.Services;
 using Tutor.Api.Services.Interfaces;
 using Tutor.Api.Tests.Utility;
@@ -94,8 +96,7 @@ public class ChatGptAudioServiceTests
         };
     }
 
-    private sealed class TestSubscriptionService()
-        : SubscriptionService(null!, null!, new TestLogger<SubscriptionService>())
+    private sealed class TestSubscriptionService : ISubscriptionService
     {
         public int AssertCallCount { get; private set; }
         public int RegisterRequestCallCount { get; private set; }
@@ -103,7 +104,7 @@ public class ChatGptAudioServiceTests
         public string? RegisteredUserId { get; private set; }
         public List<string> CallOrder { get; } = [];
 
-        public override Task Assert(string userId)
+        public Task Assert(string userId)
         {
             AssertCallCount++;
             AssertedUserId = userId;
@@ -111,12 +112,27 @@ public class ChatGptAudioServiceTests
             return Task.CompletedTask;
         }
 
-        public override Task RegisterRequest(string userId)
+        public Task RegisterRequest(string userId)
         {
             RegisterRequestCallCount++;
             RegisteredUserId = userId;
             CallOrder.Add("register");
             return Task.CompletedTask;
+        }
+
+        public Task Create(CreateSubscriptionRequest createRequest)
+        {
+            return Task.CompletedTask;
+        }
+
+        public List<string> GetSubscriptionGroups()
+        {
+            return [];
+        }
+
+        public SubscriptionGroup? GetUserUseableSubscriptionGroup(string userId)
+        {
+            return null;
         }
     }
 
