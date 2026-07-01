@@ -29,7 +29,7 @@ public class EmailSenderTests
         // Assert
         handler.Request.ShouldNotBeNull();
         handler.Request.Method.ShouldBe(HttpMethod.Post);
-        handler.Request.RequestUri.ShouldBe(new Uri(appSettings.MailJet.MailJetSendEndpoint));
+        handler.Request.RequestUri.ShouldBe(new Uri(appSettings.MailConfiguration.MailJet.MailJetSendEndpoint));
         handler.Request.Headers.Authorization.ShouldBe(new AuthenticationHeaderValue("Basic", Convert.ToBase64String("api-key:api-secret"u8.ToArray())));
 
         var payload = JsonDocument.Parse(handler.Content);
@@ -68,7 +68,7 @@ public class EmailSenderTests
         // Assert
         handler.Request.ShouldNotBeNull();
         handler.Request.Method.ShouldBe(HttpMethod.Post);
-        handler.Request.RequestUri.ShouldBe(new Uri(appSettings.MailJet.MailJetSendEndpoint));
+        handler.Request.RequestUri.ShouldBe(new Uri(appSettings.MailConfiguration.MailJet.MailJetSendEndpoint));
         handler.Request.Headers.Authorization.ShouldBe(new AuthenticationHeaderValue("Basic", Convert.ToBase64String("api-key:api-secret"u8.ToArray())));
 
         var payload = JsonDocument.Parse(handler.Content);
@@ -130,7 +130,7 @@ public class EmailSenderTests
         // Assert
         handler.Request.ShouldNotBeNull();
         handler.Request.Method.ShouldBe(HttpMethod.Post);
-        handler.Request.RequestUri.ShouldBe(new Uri(appSettings.MailJet.MailJetSendEndpoint));
+        handler.Request.RequestUri.ShouldBe(new Uri(appSettings.MailConfiguration.MailJet.MailJetSendEndpoint));
         handler.Request.Headers.Authorization.ShouldBe(new AuthenticationHeaderValue("Basic", Convert.ToBase64String("api-key:api-secret"u8.ToArray())));
 
         var payload = JsonDocument.Parse(handler.Content);
@@ -180,18 +180,18 @@ public class EmailSenderTests
     {
         return new AppSettings
         {
-            MailJet = new MailJet
+            MailConfiguration = new MailConfiguration
             {
-                MailJetSendEndpoint = "https://api.mailjet.test/v3.1/send",
-                MailCredentials = new MailJetCredentials
+                FromEmail = "noreply@tutor.test",
+                FromName = "Tutor Tests",
+                MailJet = new MailJet
                 {
-                    ApiKey = "api-key",
-                    ApiSecret = "api-secret"
-                },
-                MailConfiguration = new MailConfiguration
-                {
-                    FromEmail = "noreply@tutor.test",
-                    FromName = "Tutor Tests"
+                    MailJetSendEndpoint = "https://api.mailjet.test/v3.1/send",
+                    MailCredentials = new MailJetCredentials
+                    {
+                        ApiKey = "api-key",
+                        ApiSecret = "api-secret"
+                    }
                 }
             }
         };
