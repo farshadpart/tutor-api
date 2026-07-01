@@ -165,10 +165,16 @@ namespace Tutor.Api
             builder.Services.AddSingleton(sp =>
             {
                 var appSettings = sp.GetRequiredService<IOptions<AppSettings>>().Value;
-                appSettings.MailJet.MailCredentials = appSettings.GetMailJetCredentials();
+#if !DEBUG
+                appSettings.MailConfiguration.MailJet.MailCredentials = appSettings.GetMailJetCredentials();
+#endif
                 return appSettings;
             });
+#if DEBUG
+            builder.Services.AddScoped<IEmailSender<User>, SmtpEmailSender>();
+#else
             builder.Services.AddHttpClient<IEmailSender<User>, EmailSender>();
+#endif
             builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")
                         ?? throw new InvalidOperationException("Connection string: 'Redis' not found.")));
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IConnectionMultiplexer>().GetDatabase());
