@@ -183,11 +183,6 @@ namespace Tutor.Api
 
             var app = builder.Build();
 
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                app.UsePathBase($"/{builder.Configuration["BasePath"] ?? throw new Exception("BasePath is not configured.")}");
-            }
-
             using (var scope = app.Services.CreateScope())
             {
                 var prerequisitesService = scope.ServiceProvider.GetRequiredService<PrerequisitesService>();
@@ -201,7 +196,10 @@ namespace Tutor.Api
                 app.MapOpenApi();
             }
 
-            app.UseHttpsRedirection();
+            if(!app.Configuration.GetValue<bool>("DisableHttpsRedirection"))
+            {
+                app.UseHttpsRedirection();
+            }
 
             app.UseAuthentication();
             app.UseRateLimiter();
