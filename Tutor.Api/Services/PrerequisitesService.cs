@@ -4,7 +4,7 @@ using Tutor.Api.Models.Subscriptions;
 
 namespace Tutor.Api.Services
 {
-    public class PrerequisitesService(UserManager<User> userManager, ILogger<PrerequisitesService> logger)
+    public class PrerequisitesService(UserManager<User> userManager, ILogger<PrerequisitesService> logger, IWebHostEnvironment environment)
     {
         public async Task InsertInitialData()
         {
@@ -13,7 +13,19 @@ namespace Tutor.Api.Services
 
         private async Task InsertGoogleUser()
         {
-            string googleUserId = "f1620f14-07df-4f6f-bf05-57587d3fefc7";
+            if (environment.IsDevelopment())
+            {
+                return;
+            }
+
+            var googleUserPassword = Environment.GetEnvironmentVariable("GOOGLE_USER_PASSWORD");
+            if (string.IsNullOrEmpty(googleUserPassword))
+            {
+                logger.LogCritical("Failed to find the GOOGLE_USER_PASSWORD environment variable.");
+                throw new InvalidOperationException("Failed to find the GOOGLE_USER_PASSWORD environment variable.");
+            }
+            
+            const string googleUserId = "f1620f14-07df-4f6f-bf05-57587d3fefc7";
             var userIdentityResult = await userManager.FindByIdAsync(googleUserId);
             if (userIdentityResult is not null)
                 return;
@@ -38,7 +50,7 @@ namespace Tutor.Api.Services
                 Id = googleUserId,
                 UserName = "googleStoreUser",
                 Subscriptions = [ subscription ]
-            }, "F7!qR9@ZxM#2KpW$E8vH");
+            }, googleUserPassword);
 
             if (creationResult.Errors.Any())
             {

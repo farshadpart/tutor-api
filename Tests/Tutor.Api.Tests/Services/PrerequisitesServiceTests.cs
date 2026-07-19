@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shouldly;
@@ -9,19 +11,20 @@ using Tutor.Api.Services;
 
 namespace Tutor.Api.Tests.Services;
 
-public class PrerequisitesServiceTests
+public class PrerequisitesServiceTests : IDisposable
 {
     private const string GoogleUserId = "f1620f14-07df-4f6f-bf05-57587d3fefc7";
-    private const string GoogleUserPassword = "F7!qR9@ZxM#2KpW$E8vH";
+    private const string GoogleUserPassword = "GoogleUserPasswordSetInSecrets";
 
     [Fact]
     public async Task InsertInitialData_WhenGoogleUserAlreadyExists_DoesNotCreateOrUpdateUser()
     {
         // Arrange
+        SetGoogleUserPassword(GoogleUserPassword);
         var existingUser = new User { Id = GoogleUserId, UserName = "googleStoreUser" };
         var userManager = CreateUserManager();
         var logger = Substitute.For<ILogger<PrerequisitesService>>();
-        var sut = new PrerequisitesService(userManager, logger);
+        var sut = CreateService(userManager, logger);
 
         userManager.FindByIdAsync(GoogleUserId).Returns(existingUser);
 
@@ -39,9 +42,10 @@ public class PrerequisitesServiceTests
     public async Task InsertInitialData_WhenGoogleUserIsMissing_CreatesPlayTestUserAndConfirmsEmail()
     {
         // Arrange
+        SetGoogleUserPassword(GoogleUserPassword);
         var userManager = CreateUserManager();
         var logger = Substitute.For<ILogger<PrerequisitesService>>();
-        var sut = new PrerequisitesService(userManager, logger);
+        var sut = CreateService(userManager, logger);
         User? createdUser = null;
         string? createdPassword = null;
         User? updatedUser = null;
@@ -89,9 +93,10 @@ public class PrerequisitesServiceTests
     public async Task InsertInitialData_WhenCreateFails_LogsErrorAndDoesNotConfirmEmail()
     {
         // Arrange
+        SetGoogleUserPassword(GoogleUserPassword);
         var userManager = CreateUserManager();
         var logger = Substitute.For<ILogger<PrerequisitesService>>();
-        var sut = new PrerequisitesService(userManager, logger);
+        var sut = CreateService(userManager, logger);
         var createResult = IdentityResult.Failed(new IdentityError { Code = "CreateFailed" });
 
         userManager.FindByIdAsync(GoogleUserId).Returns(Task.FromResult<User?>(null));
@@ -111,9 +116,10 @@ public class PrerequisitesServiceTests
     public async Task InsertInitialData_WhenCreatedUserCannotBeFound_LogsErrorAndDoesNotUpdate()
     {
         // Arrange
+        SetGoogleUserPassword(GoogleUserPassword);
         var userManager = CreateUserManager();
         var logger = Substitute.For<ILogger<PrerequisitesService>>();
-        var sut = new PrerequisitesService(userManager, logger);
+        var sut = CreateService(userManager, logger);
 
         userManager.FindByIdAsync(GoogleUserId).Returns(Task.FromResult<User?>(null));
         userManager.CreateAsync(Arg.Any<User>(), GoogleUserPassword).Returns(Task.FromResult(IdentityResult.Success));
@@ -132,9 +138,10 @@ public class PrerequisitesServiceTests
     public async Task InsertInitialData_WhenEmailConfirmationUpdateFails_LogsError()
     {
         // Arrange
+        SetGoogleUserPassword(GoogleUserPassword);
         var userManager = CreateUserManager();
         var logger = Substitute.For<ILogger<PrerequisitesService>>();
-        var sut = new PrerequisitesService(userManager, logger);
+        var sut = CreateService(userManager, logger);
         User? createdUser = null;
         User? updatedUser = null;
         var updateResult = IdentityResult.Failed(new IdentityError { Code = "UpdateFailed" });
@@ -161,6 +168,56 @@ public class PrerequisitesServiceTests
         AssertSingleLog(logger, LogLevel.Error, "Failed to enable EmailConfirmed in the googleStoreUser.");
     }
 
+    [Fact]
+    public async Task InsertInitialData_WhenEnvironmentIsDevelopment_DoesNotCreateGoogleUser()
+    {
+        // Arrange
+        SetGoogleUserPassword(null);
+        var userManager = CreateUserManager();
+        var logger = Substitute.For<ILogger<PrerequisitesService>>();
+        var sut = CreateService(userManager, logger, Environments.Development);
+
+        // Act
+        await sut.InsertInitialData();
+
+        // Assert
+        await userManager.DidNotReceive().FindByIdAsync(Arg.Any<string>());
+        await userManager.DidNotReceive().CreateAsync(Arg.Any<User>(), Arg.Any<string>());
+        await userManager.DidNotReceive().UpdateAsync(Arg.Any<User>());
+        AssertNoLogs(logger);
+    }
+
+    [Fact]
+    public async Task InsertInitialData_WhenGoogleUserPasswordEnvironmentVariableIsMissing_LogsCriticalAndThrows()
+    {
+        // Arrange
+        SetGoogleUserPassword(null);
+        var userManager = CreateUserManager();
+        var logger = Substitute.For<ILogger<PrerequisitesService>>();
+        var sut = CreateService(userManager, logger);
+
+        // Act
+        var exception = await Should.ThrowAsync<InvalidOperationException>(sut.InsertInitialData);
+
+        // Assert
+        exception.Message.ShouldBe("Failed to find the GOOGLE_USER_PASSWORD environment variable.");
+        await userManager.DidNotReceive().FindByIdAsync(Arg.Any<string>());
+        await userManager.DidNotReceive().CreateAsync(Arg.Any<User>(), Arg.Any<string>());
+        await userManager.DidNotReceive().UpdateAsync(Arg.Any<User>());
+        AssertSingleLog(logger, LogLevel.Critical, "Failed to find the GOOGLE_USER_PASSWORD environment variable.");
+    }
+
+    private static PrerequisitesService CreateService(
+        UserManager<User> userManager,
+        ILogger<PrerequisitesService> logger,
+        string environmentName = "Production")
+    {
+        var environment = Substitute.For<IWebHostEnvironment>();
+        environment.EnvironmentName.Returns(environmentName);
+
+        return new PrerequisitesService(userManager, logger, environment);
+    }
+
     private static UserManager<User> CreateUserManager()
     {
         return Substitute.For<UserManager<User>>(
@@ -173,6 +230,16 @@ public class PrerequisitesServiceTests
             new IdentityErrorDescriber(),
             Substitute.For<IServiceProvider>(),
             Substitute.For<ILogger<UserManager<User>>>());
+    }
+
+    public void Dispose()
+    {
+        Environment.SetEnvironmentVariable("GOOGLE_USER_PASSWORD", string.Empty);
+    }
+
+    private static void SetGoogleUserPassword(string? password)
+    {
+        Environment.SetEnvironmentVariable("GOOGLE_USER_PASSWORD", password);
     }
 
     private static void AssertNoLogs(ILogger<PrerequisitesService> logger)
