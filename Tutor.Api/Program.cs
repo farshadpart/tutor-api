@@ -33,11 +33,8 @@ namespace Tutor.Api
                 .ReadFrom.Configuration(builder.Configuration)
                 .CreateLogger();
 
-            builder.Services.AddDbContext<TutorContext>(options =>
-                    options.UseNpgsql(builder.Configuration.GetConnectionString("TutorContext")
-                        ?? throw new InvalidOperationException("Connection string: 'TutorContext' not found.")
-                )
-            );
+            var connectionStrings = EnvironmentUtility.GetConnectionStrings(builder.Environment, builder.Configuration);
+            builder.Services.AddDbContext<TutorContext>(options => options.UseNpgsql(connectionStrings.First(x => x.Name == "TutorContext").Value));
             
             builder.Services.AddRateLimiter(options =>
             {
@@ -175,8 +172,7 @@ namespace Tutor.Api
 #else
             builder.Services.AddHttpClient<IEmailSender<User>, EmailSender>();
 #endif
-            builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")
-                        ?? throw new InvalidOperationException("Connection string: 'Redis' not found.")));
+            builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(connectionStrings.First(x => x.Name == "Redis").Value));
             builder.Services.AddSingleton(sp => sp.GetRequiredService<IConnectionMultiplexer>().GetDatabase());
             builder.Services.AddSingleton<IDistributedLockProvider>(sp => new RedisDistributedSynchronizationProvider(sp.GetRequiredService<IDatabase>()));
             builder.Services.AddSerilog();
@@ -208,7 +204,15 @@ namespace Tutor.Api
             app.MapControllers();
 
             Log.Logger.Information("Starting Tutor.Api!");
-            app.Run();
+
+            try
+            {
+                app.Run();
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
     }
 }
