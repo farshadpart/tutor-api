@@ -1,5 +1,5 @@
 name: Publish
-run-name: "Publish Tutor ${{GITHUB_RUN_NUMBER}}"
+run-name: "Publish Tutor ${{ github.run_number }}"
 
 on:
   workflow_dispatch:
