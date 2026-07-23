@@ -1,5 +1,5 @@
 name: Publish
-run-name: Publish Tutor
+run-name: "Publish Tutor ${GITHUB_RUN_NUMBER}"
 
 on:
   workflow_dispatch:
@@ -14,9 +14,13 @@ env:
   PUBLISH_DIR: publish
 
 jobs:
-  publish:
-    name: Test and Publish
+  version:
+    name: Determine Version
     runs-on: ubuntu-latest
+    outputs:
+      app_version: ${{ steps.version.outputs.app_version }}
+      app_name: ${{ steps.version.outputs.app_name }}
+      artifact_name: ${{ steps.version.outputs.artifact_name }}
 
     steps:
       - name: Check out repository
@@ -59,30 +63,44 @@ jobs:
           echo "app_name=$app_name" >> "$GITHUB_OUTPUT"
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
 
+  publish:
+    name: ${{ needs.version.outputs.app_name }}
+    runs-on: ubuntu-latest
+    needs: version
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
       - name: Restore
         run: dotnet restore Tutor.Api.sln
 
       - name: Test
         run: dotnet test Tutor.Api.sln --configuration Release --no-restore
 
-      - name: Publish app
+      - name: Publish ${{ needs.version.outputs.app_name }}
         run: >
           dotnet publish "$PROJECT_PATH"
           --configuration Release
           --no-restore
           --output "$PUBLISH_DIR"
-          -p:Version="${{ steps.version.outputs.app_version }}"
-          -p:AssemblyVersion="${{ steps.version.outputs.app_version }}"
-          -p:FileVersion="${{ steps.version.outputs.app_version }}"
-          -p:InformationalVersion="${{ steps.version.outputs.app_version }}+${GITHUB_SHA}"
+          -p:Version="${{ needs.version.outputs.app_version }}"
+          -p:AssemblyVersion="${{ needs.version.outputs.app_version }}"
+          -p:FileVersion="${{ needs.version.outputs.app_version }}"
+          -p:InformationalVersion="${{ needs.version.outputs.app_version }}+${GITHUB_SHA}"
 
-      - name: Package published app
-        run: tar -czf "${{ steps.version.outputs.artifact_name }}" -C "$PUBLISH_DIR" .
+      - name: Package ${{ needs.version.outputs.app_name }}
+        run: tar -czf "${{ needs.version.outputs.artifact_name }}" -C "$PUBLISH_DIR" .
 
-      - name: Upload published artifact
+      - name: Upload ${{ needs.version.outputs.app_name }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.version.outputs.app_name }}
-          path: ${{ steps.version.outputs.artifact_name }}
+          name: ${{ needs.version.outputs.app_name }}
+          path: ${{ needs.version.outputs.artifact_name }}
           if-no-files-found: error
           retention-days: 7

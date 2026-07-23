@@ -52,6 +52,7 @@ number.
 
 ```text
 Version: <version>.<github-run-number>
+Run: Publish Tutor
 Name: Tutor <version>.<github-run-number>
 Package: Tutor <version>.<github-run-number>.tar.gz
 ```
