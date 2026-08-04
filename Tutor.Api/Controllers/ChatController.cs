@@ -13,7 +13,7 @@ namespace Tutor.Api.Controllers
     [ApiController]
     [Route("[controller]")]
     [EnableRateLimiting("Chat")]
-    public class ChatController(ChatGptAudioService ChatGptAudioService, ChatGptChatService ChatGptChatService, ILogger<ChatController> Logger) : ControllerBase
+    public class ChatController(ChatGptAudioService chatGptAudioService, ChatGptChatService chatGptChatService, ILogger<ChatController> logger) : ControllerBase
     {
         [HttpPost("speak")]
         public async Task<IActionResult> Speak([FromForm] IFormFile voice)
@@ -23,12 +23,12 @@ namespace Tutor.Api.Controllers
 
             if (userId is null)
             {
-                Logger.LogError("The logged in user is not valid! User: {@user}", User);
+                logger.LogError("The logged in user is not valid! User: {@user}", User);
                 operation.Complete("Result", "InvalidUser");
                 return BadRequest("The user is not valid!");
             }
 
-            Logger.LogInformation(
+            logger.LogInformation(
                 "Speak chat request received for user {UserId}; file name {FileName}, content type {ContentType}, size {SizeBytes} bytes.",
                 userId,
                 voice.FileName,
@@ -37,7 +37,7 @@ namespace Tutor.Api.Controllers
 
             if(voice.Length >= Limit.MAX_VOICE_SIZE)
             {
-                Logger.LogWarning(
+                logger.LogWarning(
                     "Speak chat request rejected for user {UserId}: voice size {SizeBytes} exceeded limit {MaxSizeBytes}.",
                     userId,
                     voice.Length,
@@ -49,7 +49,7 @@ namespace Tutor.Api.Controllers
             string transcription;
             try
             {
-                transcription = await ChatGptAudioService.Transcribe(voice, userId);
+                transcription = await chatGptAudioService.Transcribe(voice, userId);
             }
             catch (Exception ex)
             {
@@ -58,7 +58,7 @@ namespace Tutor.Api.Controllers
                 throw;
             }
 
-            Logger.LogInformation(
+            logger.LogInformation(
                 "Speak chat request completed for user {UserId}; transcription length {TranscriptionLength}.",
                 userId,
                 transcription.Length);
@@ -67,35 +67,35 @@ namespace Tutor.Api.Controllers
         }
 
         [HttpPost("write")]
-        public async Task<IActionResult> Write([FromBody] Message[] tutorChat)
+        public async Task<IActionResult> Write([FromBody] Message[] tutorChat, CancellationToken token)
         {
             string? userId = User.GetClaimValue(TutorClaimTypes.Id);
             using var operation = Operation.Begin("Handle write chat request for user {UserId}", userId ?? "unknown");
 
             if( userId is null)
             {
-                Logger.LogError("The logged in user is not valid! User: {@user}", User);
+                logger.LogError("The logged in user is not valid! User: {@user}", User);
                 operation.Complete("Result", "InvalidUser");
                 return BadRequest("The user is not valid!");
             }
 
             if (tutorChat.Length == 0)
             {
-                Logger.LogWarning("Write chat request rejected for user {UserId}: request contained no messages.", userId);
+                logger.LogWarning("Write chat request rejected for user {UserId}: request contained no messages.", userId);
                 operation.Complete("Result", "NoMessages");
                 return BadRequest("Chat messages cannot be null or empty.");
             }
 
-            Logger.LogInformation(
+            logger.LogInformation(
                 "Write chat request received for user {UserId}; message count {MessageCount}, roles {Roles}, total content length {TotalContentLength}.",
                 userId,
                 tutorChat.Length,
                 string.Join(",", tutorChat.Select(x => x.Role)),
-                tutorChat.Sum(x => x.Content?.Length ?? 0));
+                tutorChat.Sum(x => x.Content.Length));
 
             if(tutorChat.Any(x => !x.Role.Equals("system") && x.Content.Length >= Limit.MAX_MESSAGE_LENGTH))
             {
-                Logger.LogWarning(
+                logger.LogWarning(
                     "Write chat request rejected for user {UserId}: at least one message exceeded limit {MaxMessageLength}.",
                     userId,
                     Limit.MAX_MESSAGE_LENGTH);
@@ -108,7 +108,7 @@ namespace Tutor.Api.Controllers
             {
                 if (string.IsNullOrWhiteSpace(message.Content))
                 {
-                    Logger.LogWarning(
+                    logger.LogWarning(
                         "Write chat request rejected for user {UserId}: message with role {Role} had empty content.",
                         userId,
                         message.Role);
@@ -126,15 +126,17 @@ namespace Tutor.Api.Controllers
             }
             chatGptChat.Add(new SystemChatMessage(Prompts.SYSTEM_PROMPT));
 
-            Logger.LogDebug(
+            logger.LogDebug(
                 "Write chat request for user {UserId} converted to {OpenAiMessageCount} OpenAI messages.",
                 userId,
                 chatGptChat.Count);
 
-            string response;
+            TutorChatReply tutorChatReply;
             try
             {
-                response = await ChatGptChatService.ChatAsync([.. chatGptChat], userId);
+                var response = await chatGptChatService.ChatAsync([.. chatGptChat], userId);
+                var audioResponse = await chatGptAudioService.Speech(response, userId, token);
+                tutorChatReply = new TutorChatReply(response, audioResponse);
             }
             catch (Exception ex)
             {
@@ -143,17 +145,14 @@ namespace Tutor.Api.Controllers
                 throw;
             }
 
-            Logger.LogInformation(
-                "Write chat request completed for user {UserId}; response length {ResponseLength}.",
-                userId,
-                response.Length);
+            logger.LogInformation("Write chat request completed for user {UserId};", userId);
             operation.Complete("Result", "Success");
-            return Ok(response);
+            return Ok(tutorChatReply);
         }
 
         private Exception LogUnsupportedRole(string userId, string role)
         {
-            Logger.LogWarning(
+            logger.LogWarning(
                 "Write chat request rejected for user {UserId}: unsupported message role {Role}.",
                 userId,
                 role);
