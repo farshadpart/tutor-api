@@ -11,6 +11,7 @@ namespace Tutor.Api.Data
         public DbSet<Subscription> Subscriptions => Set<Subscription>();
         public DbSet<Cycle> Cycles => Set<Cycle>();
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+        public DbSet<UserSettings> UserSettings => Set<UserSettings>();
 
 #if DEBUG
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

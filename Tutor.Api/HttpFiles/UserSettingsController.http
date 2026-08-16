@@ -1,0 +1,21 @@
+@TutorApi_HostAddress = http://192.168.2.103:5252
+@AccessToken = paste-access-token-from-login
+
+### Get the authenticated user's settings
+GET {{TutorApi_HostAddress}}/userSettings/get
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+###
+
+### Update the authenticated user's settings
+PUT {{TutorApi_HostAddress}}/userSettings/update
+Authorization: Bearer {{AccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "autoPlayVoice": false
+}
+
+###
