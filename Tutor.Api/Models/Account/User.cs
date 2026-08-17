@@ -7,5 +7,6 @@ namespace Tutor.Api.Models.Account
     {
         public List<Subscription> Subscriptions { get; set; } = [];
         public DateTimeOffset CreatedAt { get; set; }
+        public UserSettings Settings { get; set; } = new UserSettings();
     }
 }
