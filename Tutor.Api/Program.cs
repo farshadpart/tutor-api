@@ -68,7 +68,12 @@ namespace Tutor.Api
             {
                 options.TokenValidationParameters.ValidIssuer = builder.Configuration["Jwt:Issuer"];
                 options.TokenValidationParameters.ValidAudience = builder.Configuration["Jwt:Audience"];
-                options.TokenValidationParameters.IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SecretKey"]!));
+                options.TokenValidationParameters.IssuerSigningKey = 
+                    new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(
+                            Environment.GetEnvironmentVariable("JwtSecrectKey") ?? throw new Exception("Missing JWT secret key.")
+                        )
+                    );
                 options.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = context =>
