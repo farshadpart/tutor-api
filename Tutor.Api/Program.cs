@@ -71,7 +71,7 @@ namespace Tutor.Api
                 options.TokenValidationParameters.IssuerSigningKey = 
                     new SymmetricSecurityKey(
                         Encoding.UTF8.GetBytes(
-                            Environment.GetEnvironmentVariable("JwtSecrectKey") ?? throw new Exception("Missing JWT secret key.")
+                            Environment.GetEnvironmentVariable("JwtSecretKey") ?? throw new Exception("Missing JWT secret key.")
                         )
                     );
                 options.Events = new JwtBearerEvents
