@@ -806,6 +806,8 @@ public class AccountServiceTests
         IRefreshTokenService? refreshTokenService = null,
         ISubscriptionService? subscriptionService = null)
     {
+        Environment.SetEnvironmentVariable("JwtSecretKey", "unit-test-secret-key-with-at-least-32-chars");
+
         return new AccountService(
             CreateAppSettings(),
             userManager,
@@ -823,8 +825,7 @@ public class AccountServiceTests
                 Issuer = "Tutor.Api.Tests",
                 Audience = "Tutor.Api.Tests",
                 AccessTokenExpirationMinutes = 15,
-                RefreshTokenExpirationDays = 7,
-                SecretKey = "unit-test-secret-key-with-at-least-32-chars"
+                RefreshTokenExpirationDays = 7
             }
         };
     }

@@ -62,8 +62,8 @@ namespace Tutor.Api.Services
             var userRoles = await userManager.GetRolesAsync(identityUser);
             var userClaims = await userManager.GetClaimsAsync(identityUser);
 
-            var singingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(appSettings.Jwt.SecretKey));
-            var credentials = new SigningCredentials(singingKey, SecurityAlgorithms.HmacSha256);
+            var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(EnvironmentUtility.GetJwtSecretKey()));
+            var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
             List<Claim> claims =
             [
                 new Claim(ClaimTypes.Email, identityUser.Email ?? string.Empty),

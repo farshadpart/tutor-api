@@ -4,6 +4,17 @@ namespace Tutor.Api.Utilities;
 
 public static class EnvironmentUtility
 {
+    public static string GetJwtSecretKey()
+    {
+        var jwtSecretKey = Environment.GetEnvironmentVariable("JwtSecretKey");
+        if (string.IsNullOrWhiteSpace(jwtSecretKey))
+        {
+            throw new InvalidOperationException("Environment variable 'JwtSecretKey' is missing or empty.");
+        }
+
+        return jwtSecretKey;
+    }
+
     public static List<(string Name, string Value)> GetConnectionStrings(IWebHostEnvironment environment, IConfiguration configuration)
     {
         string? tutorConnectionString;

@@ -70,9 +70,7 @@ namespace Tutor.Api
                 options.TokenValidationParameters.ValidAudience = builder.Configuration["Jwt:Audience"];
                 options.TokenValidationParameters.IssuerSigningKey = 
                     new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(
-                            Environment.GetEnvironmentVariable("JwtSecretKey") ?? throw new Exception("Missing JWT secret key.")
-                        )
+                        Encoding.UTF8.GetBytes(EnvironmentUtility.GetJwtSecretKey())
                     );
                 options.Events = new JwtBearerEvents
                 {

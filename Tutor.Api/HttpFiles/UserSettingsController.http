@@ -1,4 +1,4 @@
-@TutorApi_HostAddress = http://192.168.2.103:5252
+@TutorApi_HostAddress = http://localhost:5252
 @AccessToken = paste-access-token-from-login
 
 ### Get the authenticated user's settings

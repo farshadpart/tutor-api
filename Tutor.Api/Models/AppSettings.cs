@@ -42,7 +42,6 @@ namespace Tutor.Api.Models
         public string Audience { get; set; } = string.Empty;
         public uint AccessTokenExpirationMinutes { get; set; }
         public uint RefreshTokenExpirationDays { get; set; }
-        public string SecretKey { get; set; } = string.Empty;
     }
 }
 
