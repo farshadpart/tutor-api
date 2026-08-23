@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using Tutor.Api.Filters;
 using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
 using Tutor.Api.Services;
 using Tutor.Api.Services.Interfaces;
+using Tutor.Api.Validators;
 
 namespace Tutor.Api.Utilities;
 
@@ -13,6 +15,7 @@ public static class ServiceRegistrationUtility
     {
         services.AddControllersWithViews();
         services.AddOpenApi();
+        services.AddScoped<ControllerExecutionTimingFilter>();
         services.AddScoped<AccountService>();
         services.AddScoped<UserSettingsService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
@@ -21,6 +24,7 @@ public static class ServiceRegistrationUtility
         services.AddScoped<IChatGptAudioClient, ChatGptAudioClient>();
         services.AddScoped<IChatGptChatClient, ChatGptChatClient>();
         services.AddScoped<ChatGptChatService>();
+        services.AddScoped<TutorChatService>();
         services.AddScoped<ISubscriptionService, SubscriptionService>();
         services.AddSingleton<SubscriptionAssertionService>();
 
