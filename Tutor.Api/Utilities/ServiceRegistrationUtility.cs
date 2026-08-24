@@ -17,6 +17,7 @@ public static class ServiceRegistrationUtility
         services.AddOpenApi();
         services.AddScoped<ControllerExecutionTimingFilter>();
         services.AddScoped<AccountService>();
+        services.AddScoped<AuthenticationService>();
         services.AddScoped<UserSettingsService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<PrerequisitesService>();

@@ -22,11 +22,11 @@ namespace Tutor.Api.Tests.Services;
 public class AccountServiceTests
 {
     [Fact]
-    public async Task ValidateLoginRequest_WhenUserDoesNotExist_ReturnsUnauthorizedAndDoesNotCheckPassword()
+    public async Task Login_WhenUserDoesNotExist_ReturnsUnauthorizedAndDoesNotCheckPassword()
     {
         // Arrange
         var userManager = CreateUserManager();
-        var sut = CreateService(userManager);
+        var sut = CreateAuthenticationService(userManager);
         var request = new RequestLogin("missing@example.com", "Password1!");
 
         userManager
@@ -37,7 +37,7 @@ public class AccountServiceTests
             .Returns(Task.FromResult<User?>(null));
 
         // Act
-        var result = await sut.ValidateLoginRequest(request);
+        var result = await sut.Login(request, "127.0.0.1", "test-agent");
 
         // Assert
         result.IsFailed.ShouldBeTrue();
@@ -50,12 +50,12 @@ public class AccountServiceTests
     }
 
     [Fact]
-    public async Task ValidateLoginRequest_WhenUserIsFoundByEmailAndPasswordIsInvalid_ReturnsUnauthorized()
+    public async Task Login_WhenUserIsFoundByEmailAndPasswordIsInvalid_ReturnsUnauthorized()
     {
         // Arrange
         var user = new User { Id = "user-1", Email = "student@example.com", UserName = "student" };
         var userManager = CreateUserManager();
-        var sut = CreateService(userManager);
+        var sut = CreateAuthenticationService(userManager);
         var request = new RequestLogin(user.Email, "wrong-password");
 
         userManager
@@ -66,7 +66,7 @@ public class AccountServiceTests
             .Returns(Task.FromResult(false));
 
         // Act
-        var result = await sut.ValidateLoginRequest(request);
+        var result = await sut.Login(request, "127.0.0.1", "test-agent");
 
         // Assert
         result.IsFailed.ShouldBeTrue();
@@ -79,12 +79,12 @@ public class AccountServiceTests
     }
 
     [Fact]
-    public async Task ValidateLoginRequest_WhenPasswordIsValidButEmailIsNotConfirmed_ReturnsUnauthorized()
+    public async Task Login_WhenPasswordIsValidButEmailIsNotConfirmed_ReturnsUnauthorized()
     {
         // Arrange
         var user = new User { Id = "user-1", Email = "student@example.com", UserName = "student" };
         var userManager = CreateUserManager();
-        var sut = CreateService(userManager);
+        var sut = CreateAuthenticationService(userManager);
         var request = new RequestLogin(user.Email, "Password1!");
 
         userManager
@@ -98,7 +98,7 @@ public class AccountServiceTests
             .Returns(Task.FromResult(false));
 
         // Act
-        var result = await sut.ValidateLoginRequest(request);
+        var result = await sut.Login(request, "127.0.0.1", "test-agent");
 
         // Assert
         result.IsFailed.ShouldBeTrue();
@@ -109,12 +109,12 @@ public class AccountServiceTests
     }
 
     [Fact]
-    public async Task ValidateLoginRequest_WhenUserIsFoundByUsernameAndCredentialsAreValid_ReturnsUser()
+    public async Task Login_WhenUserIsFoundByUsernameAndCredentialsAreValid_ReturnsTokens()
     {
         // Arrange
         var user = new User { Id = "user-1", Email = "student@example.com", UserName = "student" };
         var userManager = CreateUserManager();
-        var sut = CreateService(userManager);
+        var sut = CreateAuthenticationService(userManager);
         var request = new RequestLogin(user.UserName, "Password1!");
 
         userManager
@@ -129,13 +129,15 @@ public class AccountServiceTests
         userManager
             .IsEmailConfirmedAsync(user)
             .Returns(Task.FromResult(true));
+        userManager.GetRolesAsync(user).Returns(Task.FromResult<IList<string>>([]));
+        userManager.GetClaimsAsync(user).Returns(Task.FromResult<IList<Claim>>([]));
 
         // Act
-        var result = await sut.ValidateLoginRequest(request);
+        var result = await sut.Login(request, "127.0.0.1", "test-agent");
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        result.Value.ShouldBeSameAs(user);
+        result.Value.AccessToken.Token.ShouldNotBeNullOrWhiteSpace();
         await userManager.Received(1).FindByEmailAsync(request.Email);
         await userManager.Received(1).FindByNameAsync(request.Email);
         await userManager.Received(1).CheckPasswordAsync(user, request.Password);
@@ -143,12 +145,12 @@ public class AccountServiceTests
     }
 
     [Fact]
-    public async Task ValidateLoginRequest_WhenUserIsFoundByEmailAndCredentialsAreValid_ReturnsUser()
+    public async Task Login_WhenUserIsFoundByEmailAndCredentialsAreValid_ReturnsTokens()
     {
         // Arrange
         var user = new User { Id = "user-1", Email = "student@example.com", UserName = "student" };
         var userManager = CreateUserManager();
-        var sut = CreateService(userManager);
+        var sut = CreateAuthenticationService(userManager);
         var request = new RequestLogin(user.Email, "Password1!");
 
         userManager
@@ -160,13 +162,15 @@ public class AccountServiceTests
         userManager
             .IsEmailConfirmedAsync(user)
             .Returns(Task.FromResult(true));
+        userManager.GetRolesAsync(user).Returns(Task.FromResult<IList<string>>([]));
+        userManager.GetClaimsAsync(user).Returns(Task.FromResult<IList<Claim>>([]));
 
         // Act
-        var result = await sut.ValidateLoginRequest(request);
+        var result = await sut.Login(request, "127.0.0.1", "test-agent");
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        result.Value.ShouldBeSameAs(user);
+        result.Value.AccessToken.Token.ShouldNotBeNullOrWhiteSpace();
         await userManager.Received(1).FindByEmailAsync(request.Email);
         await userManager.DidNotReceive().FindByNameAsync(Arg.Any<string>());
         await userManager.Received(1).CheckPasswordAsync(user, request.Password);
@@ -185,7 +189,7 @@ public class AccountServiceTests
         };
         var userManager = CreateUserManager();
         var subscriptionService = CreateSubscriptionService();
-        var sut = CreateService(userManager, subscriptionService: subscriptionService);
+        var sut = CreateAuthenticationService(userManager, subscriptionService: subscriptionService);
         var userClaims = new List<Claim>
         {
             new("department", "math"),
@@ -236,7 +240,7 @@ public class AccountServiceTests
         var user = new User { Id = "user-1", Email = null, UserName = null };
         var userManager = CreateUserManager();
         var subscriptionService = CreateSubscriptionService();
-        var sut = CreateService(userManager, subscriptionService: subscriptionService);
+        var sut = CreateAuthenticationService(userManager, subscriptionService: subscriptionService);
 
         userManager
             .GetRolesAsync(user)
@@ -263,7 +267,7 @@ public class AccountServiceTests
     }
 
     [Fact]
-    public async Task Register_WhenEmailIsInvalid_ReturnsBadRequestAndDoesNotCreateUser()
+    public async Task RegisterAndSendConfirmation_WhenEmailIsInvalid_ReturnsBadRequestAndDoesNotCreateUser()
     {
         // Arrange
         var userManager = CreateUserManager();
@@ -271,7 +275,7 @@ public class AccountServiceTests
         var request = new RequestCreateUser("not-an-email", "Password1!");
 
         // Act
-        var result = await sut.Register(request);
+        var result = await sut.RegisterAndSendConfirmation(request, "https://localhost/Authentication/confirmEmail");
 
         // Assert
         result.IsFailed.ShouldBeTrue();
@@ -282,7 +286,7 @@ public class AccountServiceTests
     }
 
     [Fact]
-    public async Task Register_WhenCreateUserFails_ReturnsBadRequestAndDoesNotGenerateConfirmationToken()
+    public async Task RegisterAndSendConfirmation_WhenCreateUserFails_ThrowsAndDoesNotGenerateToken()
     {
         // Arrange
         var userManager = CreateUserManager();
@@ -294,12 +298,11 @@ public class AccountServiceTests
             .Returns(Task.FromResult(IdentityResult.Failed(new IdentityError { Code = "DuplicateEmail" })));
 
         // Act
-        var result = await sut.Register(request);
+        var exception = await Assert.ThrowsAsync<Exception>(() =>
+            sut.RegisterAndSendConfirmation(request, "https://localhost/Authentication/confirmEmail"));
 
         // Assert
-        result.IsFailed.ShouldBeTrue();
-        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Failed to create the user!");
-        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
+        exception.Message.ShouldBe("User creation failed.");
         await userManager.Received(1).CreateAsync(
             Arg.Is<User>(user =>
                 user.Email == request.Email &&
@@ -311,40 +314,48 @@ public class AccountServiceTests
     }
 
     [Fact]
-    public async Task Register_WhenCreateUserSucceeds_ReturnsUserAndEmailConfirmationToken()
+    public async Task RegisterAndSendConfirmation_WhenRegistrationSucceeds_SendsConfirmationLink()
     {
         // Arrange
         const string token = "confirmation-token";
+        const string confirmationEndpoint = "https://localhost/Authentication/confirmEmail";
         var userManager = CreateUserManager();
-        var sut = CreateService(userManager);
+        var emailSender = Substitute.For<IEmailSender<User>>();
+        var sut = CreateService(userManager, emailSender: emailSender);
         var request = new RequestCreateUser("student@example.com", "Password1!");
         User? createdUser = null;
 
         userManager
-            .CreateAsync(Arg.Do<User>(user => createdUser = user), request.Password)
+            .CreateAsync(Arg.Do<User>(user =>
+            {
+                user.Id = "user-1";
+                createdUser = user;
+            }), request.Password)
             .Returns(Task.FromResult(IdentityResult.Success));
         userManager
             .GenerateEmailConfirmationTokenAsync(Arg.Any<User>())
             .Returns(Task.FromResult(token));
 
         // Act
-        var result = await sut.Register(request);
+        var result = await sut.RegisterAndSendConfirmation(request, confirmationEndpoint);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        result.Value.Token.ShouldBe(token);
-        result.Value.User.ShouldBeSameAs(createdUser);
-        result.Value.User.Email.ShouldBe(request.Email);
-        result.Value.User.UserName.ShouldBe(request.Email);
-        result.Value.User.NormalizedEmail.ShouldBe(request.Email.ToUpper());
-        result.Value.User.NormalizedUserName.ShouldBe(request.Email.ToUpper());
         createdUser.ShouldNotBeNull();
+        createdUser.Email.ShouldBe(request.Email);
+        createdUser.UserName.ShouldBe(request.Email);
+        createdUser.NormalizedEmail.ShouldBe(request.Email.ToUpper());
+        createdUser.NormalizedUserName.ShouldBe(request.Email.ToUpper());
         await userManager.Received(1).CreateAsync(createdUser, request.Password);
         await userManager.Received(1).GenerateEmailConfirmationTokenAsync(createdUser!);
+        await emailSender.Received(1).SendConfirmationLinkAsync(
+            createdUser!,
+            request.Email,
+            $"{confirmationEndpoint}?userId=user-1&token={token}");
     }
 
     [Fact]
-    public async Task Register_WhenConfirmationTokenIsEmpty_Throws()
+    public async Task RegisterAndSendConfirmation_WhenConfirmationTokenIsEmpty_Throws()
     {
         // Arrange
         var userManager = CreateUserManager();
@@ -359,7 +370,8 @@ public class AccountServiceTests
             .Returns(Task.FromResult(string.Empty));
 
         // Act
-        var exception = await Assert.ThrowsAsync<Exception>(() => sut.Register(request));
+        var exception = await Assert.ThrowsAsync<Exception>(() =>
+            sut.RegisterAndSendConfirmation(request, "https://localhost/Authentication/confirmEmail"));
 
         // Assert
         exception.Message.ShouldBe("Method GenerateEmailConfirmationTokenAsync failed to generate the confirmation token!");
@@ -390,7 +402,7 @@ public class AccountServiceTests
     }
 
     [Fact]
-    public async Task ConfirmEmail_WhenIdentityConfirmationFails_ReturnsBadRequest()
+    public async Task ConfirmEmail_WhenIdentityConfirmationFails_Throws()
     {
         // Arrange
         const string token = "confirmation-token";
@@ -406,12 +418,10 @@ public class AccountServiceTests
             .Returns(Task.FromResult(IdentityResult.Failed(new IdentityError { Code = "InvalidToken" })));
 
         // Act
-        var result = await sut.ConfirmEmail(user.Id, token);
+        var exception = await Assert.ThrowsAsync<Exception>(() => sut.ConfirmEmail(user.Id, token));
 
         // Assert
-        result.IsFailed.ShouldBeTrue();
-        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Something went wrong!");
-        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
+        exception.Message.ShouldBe("Failed to confirm the user");
         await userManager.Received(1).FindByIdAsync(user.Id);
         await userManager.Received(1).ConfirmEmailAsync(user, token);
     }
@@ -461,7 +471,7 @@ public class AccountServiceTests
     }
 
     [Fact]
-    public async Task GeneratePasswordResetToken_WhenUserDoesNotExist_ReturnsNotFoundAndDoesNotGenerateToken()
+    public async Task GeneratePasswordResetToken_WhenUserDoesNotExist_ReturnsBadRequestAndDoesNotGenerateToken()
     {
         // Arrange
         var userManager = CreateUserManager();
@@ -478,13 +488,13 @@ public class AccountServiceTests
         // Assert
         result.IsFailed.ShouldBeTrue();
         result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Password reset target not found.");
-        result.Errors.Single().Metadata["MethodName"].ShouldBe("NotFound");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
         await userManager.Received(1).FindByEmailAsync(request.Email);
         await userManager.DidNotReceive().GeneratePasswordResetTokenAsync(Arg.Any<User>());
     }
 
     [Fact]
-    public async Task GeneratePasswordResetToken_WhenUserEmailIsNull_ReturnsNotFoundAndDoesNotGenerateToken()
+    public async Task GeneratePasswordResetToken_WhenUserEmailIsNull_ReturnsBadRequestAndDoesNotGenerateToken()
     {
         // Arrange
         var user = new User { Id = "user-1", Email = null };
@@ -502,13 +512,13 @@ public class AccountServiceTests
         // Assert
         result.IsFailed.ShouldBeTrue();
         result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Password reset target not found.");
-        result.Errors.Single().Metadata["MethodName"].ShouldBe("NotFound");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
         await userManager.Received(1).FindByEmailAsync(request.Email);
         await userManager.DidNotReceive().GeneratePasswordResetTokenAsync(Arg.Any<User>());
     }
 
     [Fact]
-    public async Task GeneratePasswordResetToken_WhenGeneratedTokenIsEmpty_ReturnsInternalServerError()
+    public async Task GeneratePasswordResetToken_WhenGeneratedTokenIsEmpty_Throws()
     {
         // Arrange
         var user = new User { Id = "user-1", Email = "student@example.com" };
@@ -524,12 +534,10 @@ public class AccountServiceTests
             .Returns(Task.FromResult(string.Empty));
 
         // Act
-        var result = await sut.GeneratePasswordResetToken(request);
+        var exception = await Assert.ThrowsAsync<Exception>(() => sut.GeneratePasswordResetToken(request));
 
         // Assert
-        result.IsFailed.ShouldBeTrue();
-        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Something went wrong!");
-        result.Errors.Single().Metadata["MethodName"].ShouldBe("InternalServerError");
+        exception.Message.ShouldBe("Method GeneratePasswordResetTokenAsync failed to generate the reset token");
         await userManager.Received(1).GeneratePasswordResetTokenAsync(user);
     }
 
@@ -560,6 +568,47 @@ public class AccountServiceTests
         Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(result.Value.Token)).ShouldBe(token);
         await userManager.Received(1).FindByEmailAsync(request.Email);
         await userManager.Received(1).GeneratePasswordResetTokenAsync(user);
+    }
+
+    [Fact]
+    public async Task SendPasswordResetEmail_WhenUserDoesNotExist_ReturnsBadRequestWithoutSendingEmail()
+    {
+        var userManager = CreateUserManager();
+        var emailSender = Substitute.For<IEmailSender<User>>();
+        var sut = CreateService(userManager, emailSender: emailSender);
+        var request = new RequestForgotPassword("missing@example.com");
+        userManager.FindByEmailAsync(request.Email).Returns((User?)null);
+
+        var result = await sut.SendPasswordResetEmail(request);
+
+        result.IsFailed.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Message.ShouldBe("Password reset target not found.");
+        result.Errors.Single().Metadata["MethodName"].ShouldBe("BadRequest");
+        await emailSender.DidNotReceive().SendPasswordResetCodeAsync(
+            Arg.Any<User>(),
+            Arg.Any<string>(),
+            Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task SendPasswordResetEmail_WhenUserExists_SendsEncodedResetToken()
+    {
+        const string rawToken = "reset-token/with+special=characters";
+        var user = new User { Id = "user-1", Email = "student@example.com" };
+        var userManager = CreateUserManager();
+        var emailSender = Substitute.For<IEmailSender<User>>();
+        var sut = CreateService(userManager, emailSender: emailSender);
+        var request = new RequestForgotPassword(user.Email);
+        userManager.FindByEmailAsync(request.Email).Returns(user);
+        userManager.GeneratePasswordResetTokenAsync(user).Returns(rawToken);
+
+        var result = await sut.SendPasswordResetEmail(request);
+
+        result.IsSuccess.ShouldBeTrue();
+        await emailSender.Received(1).SendPasswordResetCodeAsync(
+            user,
+            user.Email,
+            EncodeResetToken(rawToken));
     }
 
     [Fact]
@@ -689,7 +738,7 @@ public class AccountServiceTests
         // Arrange
         var userManager = CreateUserManager();
         var refreshTokenService = CreateRefreshTokenService();
-        var sut = CreateService(userManager, refreshTokenService);
+        var sut = CreateAuthenticationService(userManager, refreshTokenService);
 
         refreshTokenService
             .GetRefreshTokens(Arg.Any<Func<RefreshToken, bool>>())
@@ -713,7 +762,7 @@ public class AccountServiceTests
         const string refreshTokenRaw = "expired-refresh-token";
         var userManager = CreateUserManager();
         var refreshTokenService = CreateRefreshTokenService();
-        var sut = CreateService(userManager, refreshTokenService);
+        var sut = CreateAuthenticationService(userManager, refreshTokenService);
         var refreshToken = new RefreshToken(
             "user-1",
             TokenHelpers.Sha256(refreshTokenRaw),
@@ -755,7 +804,7 @@ public class AccountServiceTests
         };
         var userManager = CreateUserManager();
         var refreshTokenService = CreateRefreshTokenService();
-        var sut = CreateService(userManager, refreshTokenService, CreateSubscriptionService());
+        var sut = CreateAuthenticationService(userManager, refreshTokenService, CreateSubscriptionService());
         var refreshToken = new RefreshToken(
             user.Id,
             TokenHelpers.Sha256(refreshTokenRaw),
@@ -779,7 +828,7 @@ public class AccountServiceTests
             .Returns(Task.FromResult<IList<string>>([]));
         userManager
             .GetClaimsAsync(user)
-            .Returns(Task.FromResult<IList<System.Security.Claims.Claim>>([]));
+            .Returns(Task.FromResult<IList<Claim>>([]));
 
         // Act
         var result = await sut.RefreshAsync(refreshTokenRaw, ip, userAgent);
@@ -804,16 +853,32 @@ public class AccountServiceTests
     private static AccountService CreateService(
         UserManager<User> userManager,
         IRefreshTokenService? refreshTokenService = null,
+        ISubscriptionService? subscriptionService = null,
+        IEmailSender<User>? emailSender = null)
+    {
+        return new AccountService(
+            userManager,
+            refreshTokenService!,
+            emailSender ?? Substitute.For<IEmailSender<User>>(),
+            new TestLogger<AccountService>());
+    }
+
+    private static AuthenticationService CreateAuthenticationService(
+        UserManager<User> userManager,
+        IRefreshTokenService? refreshTokenService = null,
         ISubscriptionService? subscriptionService = null)
     {
         Environment.SetEnvironmentVariable("JwtSecretKey", "unit-test-secret-key-with-at-least-32-chars");
 
-        return new AccountService(
+        refreshTokenService ??= CreateRefreshTokenService();
+        subscriptionService ??= CreateSubscriptionService();
+
+        return new AuthenticationService(
             CreateAppSettings(),
             userManager,
-            subscriptionService!,
-            refreshTokenService!,
-            new TestLogger<AccountService>());
+            subscriptionService,
+            refreshTokenService,
+            new TestLogger<AuthenticationService>());
     }
 
     private static AppSettings CreateAppSettings()

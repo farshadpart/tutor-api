@@ -1,156 +1,72 @@
 ﻿using FluentResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.IdentityModel.JsonWebTokens;
-using Microsoft.IdentityModel.Tokens;
 using System.Net.Mail;
-using System.Security.Claims;
 using System.Text;
-using Tutor.Api.Models;
 using Tutor.Api.Models.Account;
-using Tutor.Api.Models.Constants;
 using Tutor.Api.Models.Tutor.Api.Contracts.Account;
 using Tutor.Api.Services.Interfaces;
-using Tutor.Api.Utilities;
 
 namespace Tutor.Api.Services
 {
     public class AccountService(
-        AppSettings appSettings,
         UserManager<User> userManager,
-        ISubscriptionService subscriptionService,
         IRefreshTokenService refreshTokenService,
+        IEmailSender<User> emailSender,
         ILogger<AccountService> logger)
     {
-        public async Task<Result<User>> ValidateLoginRequest(RequestLogin requestLogin)
+        public async Task<Result> RegisterAndSendConfirmation(RequestCreateUser requestCreateUser, string confirmationEndpoint)
         {
-            logger.LogDebug("Validating login request for {Email}.", requestLogin.Email);
-            var identityUser = await userManager.FindByEmailAsync(requestLogin.Email) ?? await userManager.FindByNameAsync(requestLogin.Email);
-
-            if (identityUser is null)
+            var registerResult = await Register(requestCreateUser);
+            if (registerResult.IsFailed)
             {
-                logger.LogWarning("Login rejected for {Email}: user was not found.", requestLogin.Email);
-                IError authorizationError = new Error("Invalid email or password!")
-                    .WithMetadata("MethodName", "Unauthorized");
-                return Result.Fail(authorizationError);
+                return Result.Fail(registerResult.Errors);
             }
 
-            var passwordValid = await userManager.CheckPasswordAsync(identityUser, requestLogin.Password);
-            if (!passwordValid)
+            var (user, token) = registerResult.Value;
+            if (user.Email is null)
             {
-                logger.LogWarning("Login rejected for user {UserId}: invalid password.", identityUser.Id);
-                IError authorizationError = new Error("Invalid email or password!")
-                    .WithMetadata("MethodName", "Unauthorized");
-                return Result.Fail(authorizationError);
+                logger.LogError("User {UserId} email is null, cannot send confirmation link.", user.Id);
+                throw new Exception("Something went wrong!");
             }
 
-            if (!await userManager.IsEmailConfirmedAsync(identityUser))
-            {
-                logger.LogWarning("Login rejected for user {UserId}: email is not confirmed.", identityUser.Id);
-                IError authorizationError = new Error("Email not confirmed!")
-                    .WithMetadata("MethodName", "Unauthorized");
-                return Result.Fail(authorizationError);
-            }
+            var confirmationLink = QueryHelpers.AddQueryString(
+                confirmationEndpoint,
+                new Dictionary<string, string?> { ["userId"] = user.Id, ["token"] = token }
+            );
 
-            logger.LogInformation("Login request validated for user {UserId}.", identityUser.Id);
-            return Result.Ok(identityUser);
-        }
-
-        public async Task<AccessTokenHolder> CreateAccessToken(User identityUser)
-        {
-            logger.LogDebug("Creating access token for user {UserId}.", identityUser.Id);
-            var userRoles = await userManager.GetRolesAsync(identityUser);
-            var userClaims = await userManager.GetClaimsAsync(identityUser);
-
-            var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(EnvironmentUtility.GetJwtSecretKey()));
-            var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
-            List<Claim> claims =
-            [
-                new Claim(ClaimTypes.Email, identityUser.Email ?? string.Empty),
-                new Claim(ClaimTypes.Name, identityUser.UserName ?? string.Empty),
-                new Claim(TutorClaimTypes.Id, identityUser.Id)
-            ];
-
-            var userSubscriptionGroup = subscriptionService.GetUserUseableSubscriptionGroup(identityUser.Id);
-            if (userSubscriptionGroup is not null)
-            {
-                claims.Add(new Claim(TutorClaimTypes.SubscriptionGroup, userSubscriptionGroup.Value.ToString()));
-            }
-            claims.AddRange(userClaims);
-            foreach (var role in userRoles)
-            {
-                claims.Add(new Claim(ClaimTypes.Role, role));
-            }
-
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddMinutes(appSettings.Jwt.AccessTokenExpirationMinutes),
-                SigningCredentials = credentials,
-                Issuer = appSettings.Jwt.Issuer,
-                Audience = appSettings.Jwt.Audience,
-                IssuedAt = DateTime.UtcNow
-            };
-
+            await emailSender.SendConfirmationLinkAsync(user, user.Email, confirmationLink);
             logger.LogInformation(
-                "Issued access token for user {UserId}; expires at {ExpiresAt}; roles: {RoleCount}; custom claims: {ClaimCount}.",
-                identityUser.Id,
-                tokenDescriptor.Expires,
-                userRoles.Count,
-                userClaims.Count);
-
-            return new AccessTokenHolder(new JsonWebTokenHandler().CreateToken(tokenDescriptor), Expiration: tokenDescriptor.Expires.Value);
-        }
-
-        public async Task<Result<TokenHolder>> RefreshAsync(string refreshTokenRaw, string ip, string? userAgent)
-        {
-            logger.LogInformation("Refresh token validation started from IP {Ip}.", ip);
-            var incomingHash = TokenHelpers.Sha256(refreshTokenRaw);
-
-            var existing = refreshTokenService.GetRefreshTokens(x => x.TokenHash == incomingHash).FirstOrDefault();
-
-            if (existing == null || existing.User is null)
-            {
-                logger.LogWarning("Refresh token rejected from IP {Ip}: token was not found or user was missing.", ip);
-                IError authorizationError = new Error("Refresh token is not valid!")
-                    .WithMetadata("MethodName", "Unauthorized");
-                return Result.Fail(authorizationError);
-            }
-
-            if (!existing.IsActive)
-            {
-                logger.LogWarning(
-                    "Refresh token rejected for user {UserId} from IP {Ip}: revoked at {RevokedAt}, expires at {ExpiresAt}.",
-                    existing.UserId,
-                    ip,
-                    existing.RevokedAt,
-                    existing.ExpiresAt);
-                IError authorizationError = new Error("Refresh token is not valid!")
-                    .WithMetadata("MethodName", "Unauthorized");
-                return Result.Fail(authorizationError);
-            }
-
-            await refreshTokenService.RevokeAllUserRefreshTokens(existing.TokenHash, ip);
-            var user = existing.User;
-
-            var newRefreshRaw = TokenHelpers.GenerateRefreshToken();
-            var newRefreshHash = TokenHelpers.Sha256(newRefreshRaw);
-            var newRefreshExp = DateTime.UtcNow.AddDays(appSettings.Jwt.RefreshTokenExpirationDays);
-
-            existing.RevokedAt = DateTime.UtcNow;
-            existing.RevokedByIp = ip;
-            existing.ReplacedByTokenHash = newRefreshHash;
-
-            await refreshTokenService.Add(new RefreshToken(user.Id, newRefreshHash, DateTime.UtcNow, newRefreshExp, userAgent, ip));
-
-            var accessTokenResult = await CreateAccessToken(user);
-
-            logger.LogInformation(
-                "Refresh token rotated for user {UserId} from IP {Ip}; new refresh token expires at {ExpiresAt}.",
+                "Registration completed for user {UserId}; confirmation email sent to {Email}.",
                 user.Id,
-                ip,
-                newRefreshExp);
-            return Result.Ok(new TokenHolder(accessTokenResult, new RefreshTokenHolder(newRefreshRaw, newRefreshExp)));
+                user.Email
+            );
+            return Result.Ok();
+        }
+
+        public async Task<Result> SendPasswordResetEmail(RequestForgotPassword request)
+        {
+            var tokenResult = await GeneratePasswordResetToken(request);
+            if (tokenResult.IsFailed)
+            {
+                var isNotFound = tokenResult.Errors.Any(error =>
+                    error.Metadata.TryGetValue("MethodName", out var methodName) &&
+                    methodName as string == "NotFound");
+
+                return isNotFound ? Result.Ok() : Result.Fail(tokenResult.Errors);
+            }
+
+            var (user, token) = tokenResult.Value;
+            if (user.Email is null)
+            {
+                logger.LogError("User {UserId} email is null, cannot send password reset link.", user.Id);
+                return Result.Fail(new Error("Something went wrong!")
+                    .WithMetadata("MethodName", "InternalServerError"));
+            }
+
+            await emailSender.SendPasswordResetCodeAsync(user, user.Email, token);
+            logger.LogInformation("Password reset token generated and emailed for user {UserId}.", user.Id);
+            return Result.Ok();
         }
 
         public async Task<Result> ConfirmEmail(string userId, string token)
@@ -167,9 +83,7 @@ namespace Tutor.Api.Services
             if (!identityResult.Succeeded)
             {
                 logger.LogWarning("Email confirmation rejected for user {UserId}. Errors: {@Errors}", userId, identityResult.Errors);
-                IError authorizationError = new Error("Something went wrong!")
-                    .WithMetadata("MethodName", "BadRequest");
-                return Result.Fail(authorizationError);
+                throw new Exception("Failed to confirm the user");
             }
 
             logger.LogInformation("Email confirmation succeeded for user {UserId}.", userId);
@@ -191,16 +105,14 @@ namespace Tutor.Api.Services
             {
                 logger.LogWarning("Password reset requested for non-existing email {Email}.", requestForgotPassword.Email);
                 return Result.Fail(new Error("Password reset target not found.")
-                    .WithMetadata("MethodName", "NotFound"));
+                    .WithMetadata("MethodName", "BadRequest"));
             }
 
             var token = await userManager.GeneratePasswordResetTokenAsync(identityUser);
             if (string.IsNullOrEmpty(token))
             {
                 logger.LogError("Method GeneratePasswordResetTokenAsync failed to generate the reset token for user {UserId}.", identityUser.Id);
-                IError authorizationError = new Error("Something went wrong!")
-                    .WithMetadata("MethodName", "InternalServerError");
-                return Result.Fail(authorizationError);
+                throw new Exception("Method GeneratePasswordResetTokenAsync failed to generate the reset token");
             }
 
             var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
@@ -256,7 +168,7 @@ namespace Tutor.Api.Services
             return Result.Ok();
         }
 
-        public async Task<Result<(User User, string Token)>> Register(RequestCreateUser requestCreateUser)
+        private async Task<Result<(User User, string Token)>> Register(RequestCreateUser requestCreateUser)
         {
             if (!MailAddress.TryCreate(requestCreateUser.Email, out _))
             {
@@ -278,9 +190,7 @@ namespace Tutor.Api.Services
             if (!identityResult.Succeeded)
             {
                 logger.LogError("Failed to create user with email {Email}. Errors: {@errors}", requestCreateUser.Email, identityResult.Errors);
-                IError authorizationError = new Error("Failed to create the user!")
-                    .WithMetadata("MethodName", "BadRequest");
-                return Result.Fail(authorizationError);
+                throw new Exception("User creation failed.");
             }
 
             var token = await userManager.GenerateEmailConfirmationTokenAsync(identityUser);
