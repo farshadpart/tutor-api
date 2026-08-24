@@ -75,10 +75,9 @@ namespace Tutor.Api.Controllers
             }
 
             logger.LogInformation(
-                "Write chat request received for user {UserId}; message count {MessageCount}, roles {Roles}, total content length {TotalContentLength}.",
+                "Write chat request received for user {UserId}; message count {MessageCount}, total content length {TotalContentLength}.",
                 userId,
                 tutorChat.Length,
-                string.Join(",", tutorChat.Select(x => x.Role)),
                 tutorChat.Sum(x => x.Content.Length));
 
             var tutorChatReply = await tutorChatService.ReplyAsync(tutorChat, userId, token);
