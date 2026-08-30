@@ -4,6 +4,7 @@ namespace Tutor.Api.Models
 {
     public record AppSettings
     {
+        public string StorageRootDirectory { get; init; } = string.Empty;
         public MailConfiguration MailConfiguration { get; set; } = new();
         public JWT Jwt { get; set; } = new();
     }

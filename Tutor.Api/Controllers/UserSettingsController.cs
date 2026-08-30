@@ -44,5 +44,44 @@ namespace Tutor.Api.Controllers
 
             return Ok();
         }
+
+        [HttpGet("getUserAvatar")]
+        public async Task<IActionResult> GetUserAvatar()
+        {
+            var userId = User.GetClaimValue(TutorClaimTypes.Id);
+            if (userId is null)
+            {
+                logger.LogWarning("Avatar request rejected because the user ID claim is missing.");
+                return Unauthorized();
+            }
+
+            var avatarFile = await userSettingsService.GetUserAvatarFile(userId);
+            if (avatarFile is null)
+            {
+                return NotFound();
+            }
+
+            return PhysicalFile(avatarFile.FilePath, avatarFile.ContentType);
+        }
+
+        [HttpPut("updateUserAvatar")]
+        public async Task<IActionResult> UpdateUserAvatar([FromForm] IFormFile image)
+        {
+            var userId = User.GetClaimValue(TutorClaimTypes.Id);
+            if (userId is null)
+            {
+                return Unauthorized();
+            }
+
+            try
+            {
+                await userSettingsService.UpdateUserAvatar(userId, image);
+                return Ok();
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest();
+            }
+        }
     }
 }

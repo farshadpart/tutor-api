@@ -12,6 +12,7 @@ namespace Tutor.Api.Data
         public DbSet<Cycle> Cycles => Set<Cycle>();
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
         public DbSet<UserSettings> UserSettings => Set<UserSettings>();
+        public DbSet<StoredImage> Images => Set<StoredImage>();
 
 #if DEBUG
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -33,6 +34,19 @@ namespace Tutor.Api.Data
 
             builder.Entity<RefreshToken>()
                 .HasIndex(x => new { x.UserId, x.ExpiresAt });
+
+            builder.Entity<StoredImage>()
+                .Property(x => x.FileName)
+                .HasMaxLength(255);
+
+            builder.Entity<StoredImage>()
+                .Property(x => x.Format)
+                .HasMaxLength(10);
+
+            builder.Entity<UserSettings>()
+                .HasOne(x => x.UserProfileImage)
+                .WithOne()
+                .HasForeignKey<UserSettings>(x => x.UserProfileImageId);
         }
     }
 }

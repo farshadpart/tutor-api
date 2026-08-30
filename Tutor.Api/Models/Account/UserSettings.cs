@@ -6,4 +6,6 @@ public class UserSettings
     public string UserId { get; set; } = string.Empty;
     public User User { get; set; } = null!;
     public bool AutoPlayVoice { get; set; } = true;
+    public Guid? UserProfileImageId { get; set; }
+    public StoredImage? UserProfileImage { get; set; }
 }
