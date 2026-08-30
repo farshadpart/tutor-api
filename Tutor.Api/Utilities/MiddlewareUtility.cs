@@ -17,7 +17,8 @@ public static class MiddlewareUtility
         {
             app.UseHttpsRedirection();
         }
-
+        
+        app.UseStaticFiles();
         app.UseAuthentication();
         app.UseRateLimiter();
         app.UseAuthorization();
